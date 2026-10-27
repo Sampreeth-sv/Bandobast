@@ -1,0 +1,744 @@
+Build Bandobast — An Intelligent Event Operations Platform
+
+Act as a senior full-stack engineer, product designer, AI engineer and QA engineer. Build a polished, functional, production-minded web application called **Bandobast** for the PromptWars Challenge 5: Celebration & Event Planner.
+
+Do not stop after proposing a plan, generating wireframes or creating a landing page. Inspect the workspace, establish the architecture, implement the application, run it, test the critical workflows, fix errors and document how to use it.
+
+If the workspace already contains a project, inspect it and preserve useful existing work. If it is empty, initialize the project. Work in manageable stages, but continue implementation without waiting for approval after each stage.
+
+---
+
+## 1. PRODUCT VISION
+
+**Product:** Bandobast
+
+**Tagline:** One change. A thousand connections. Bandobast keeps it together.
+
+**Product description:** Bandobast is an AI-powered event operations platform that connects budgets, vendors, guest counts, family priorities and deadlines into one living plan. It helps event organizers understand how a change affects the entire event, compare meaningful alternatives and keep the plan synchronized.
+
+### Target persona
+
+Initially target the person coordinating a multi-function Indian wedding involving:
+
+- Mehendi
+- Sangeet
+- Wedding ceremony
+- Reception
+
+They must manage a fixed budget, changing guest counts, vendor quotations, family preferences, bookings, deadlines and interconnected tasks.
+
+The architecture should be reusable for engagements, birthdays and community festivals such as Navratri and Diwali, but the initial experience should focus on a multi-function Indian wedding.
+
+### The core differentiator
+
+Do not make this another generic AI chatbot or party-idea generator.
+
+Build an event-management system that can:
+
+1. Understand the event and the organizer's constraints.
+2. Maintain a structured representation of the event.
+3. Calculate budgets and deadlines using deterministic code.
+4. Show how changes propagate through dependent tasks and costs.
+5. Generate alternative plans that respect the organizer's priorities.
+6. Extract and compare vendor quotations with clear source attribution.
+7. Apply an approved scenario to the actual event plan.
+
+The application must be a responsive web application, not a native mobile app.
+
+---
+
+## 2. VISUAL DESIGN SYSTEM — VERY IMPORTANT
+
+Create a premium, warm, elegant and modern visual identity inspired by Indian celebrations.
+
+**Do not use dark blue, navy or purple as the main theme. Do not default to a generic dark SaaS dashboard.**
+
+Use this palette:
+
+- Warm ivory background: `#FAF7F0`
+- White/cream card surface: `#FFFDF9`
+- Forest olive: `#405B43`
+- Sage green: `#DCE6D6`
+- Marigold: `#E7A83E`
+- Terracotta: `#C76F50`
+- Espresso text: `#302F28`
+- Muted text: `#77756B`
+- Soft borders: `#E7E0D3`
+- Warning: a high-contrast amber treatment
+- Error: a clear, accessible red treatment
+
+Use forest olive for primary actions and selected navigation, marigold for celebration-related highlights and important metrics, terracotta for secondary accents, and sage for supportive panels and status indicators.
+
+Maintain readable contrast. Do not use pale text on pale backgrounds or rely on color alone to communicate a status.
+
+### Design language
+
+- Elegant editorial typography with a refined serif for major headings and a clean sans-serif for body text.
+- Use Playfair Display for selected display headings and Inter or a comparable sans-serif for interface text, with robust fallback fonts.
+- Generous whitespace, subtle borders, restrained shadows, rounded corners and clear visual hierarchy.
+- Use delicate geometric or floral motifs sparingly. Avoid excessive wedding clipart, gaudy gold gradients, stereotypical ethnic patterns or an overly decorative interface.
+- Use consistent Lucide icons.
+- Create a polished desktop dashboard with a fully usable mobile layout.
+- Add subtle transitions for navigation, cards, status changes and chart interactions.
+- Avoid excessive gradients, oversized hero sections inside the actual dashboard and unnecessary decorative cards.
+- Use reusable design tokens and shared components rather than styling each screen independently.
+
+The finished product should look like a credible, premium event-tech startup, not a student dashboard template.
+
+---
+
+## 3. REQUIRED TECH STACK
+
+Use the following stack unless the existing repository already has an equivalent working architecture:
+
+### Frontend
+
+- React
+- Vite
+- TypeScript
+- Tailwind CSS
+- shadcn/ui or similarly accessible reusable components
+- Lucide React icons
+- Recharts for financial visualizations
+- React Flow for the interactive dependency graph
+- React Router for navigation
+
+### Backend
+
+- Python
+- FastAPI
+- Pydantic for request and response validation
+- The official Google Gen AI SDK for Gemini integration
+- Pytest for backend testing
+
+### Persistence
+
+- Supabase PostgreSQL for events, budgets, tasks, preferences, vendor quotations and scenario data.
+
+### Deployment readiness
+
+- Frontend: Firebase Hosting or another static hosting service.
+- Backend: Google Cloud Run.
+- Keep the architecture deployable, but prioritize a working local application before deployment.
+
+Use environment variables for secrets and configuration. Add `.env.example` files without real credentials. Never embed the Gemini API key in the frontend.
+
+If credentials are unavailable, the application must still start and provide a clearly labelled demo mode. Do not block development while waiting for credentials.
+
+---
+
+## 4. APPLICATION STRUCTURE
+
+Create a consistent application shell with a collapsible sidebar, top header, main content area, useful breadcrumbs and responsive navigation.
+
+Include these sections:
+
+1. Overview
+2. My Events
+3. Budget Studio
+4. Ripple Engine
+5. Vendor Quotes
+6. Timeline
+7. Priorities & Settings
+
+Each navigation item must lead to a meaningful working screen. Avoid empty placeholder pages and dead buttons.
+
+For the initial implementation, the Overview page should open with a prepared, clearly labelled example wedding so the product can be demonstrated immediately. Also provide an option to create a new event.
+
+### A. Overview dashboard
+
+Show:
+
+- Selected event name, date and event location.
+- Event readiness indicator.
+- Total budget, planned spending and remaining balance.
+- Guest count.
+- Upcoming tasks.
+- Pending vendor decisions.
+- Budget allocation visualization.
+- Multi-function event timeline preview.
+- Recent changes and their downstream impacts.
+- A prominent action to simulate a change and inspect its effects.
+
+The readiness indicator must be calculated from defined task and booking statuses, not invented by Gemini.
+
+Clicking a metric or task should take the user to the relevant section.
+
+### B. Event setup wizard
+
+Collect:
+
+- Event name and occasion.
+- Event location.
+- Event date or dates.
+- Number and names of functions.
+- Total budget.
+- Initial guest count.
+- Function-specific expected attendance where relevant.
+- Essential priorities.
+- Items that must not be reduced.
+- Known bookings and vendor quotations.
+- Contingency reserve.
+
+Offer sensible suggested defaults, but allow the user to edit everything.
+
+Use targeted clarification questions when essential information is missing. Clearly identify AI-generated suggestions that have not yet been confirmed by the user.
+
+Store the event in a consistent structured representation shared across the application.
+
+### C. Budget Studio
+
+Provide an editable budget with categories such as:
+
+- Venue
+- Catering
+- Decoration
+- Photography and videography
+- Clothing and makeup
+- Transportation
+- Accommodation
+- Invitations and stationery
+- Return gifts
+- Miscellaneous
+- Contingency reserve
+
+Allow the user to add, remove and edit categories and line items.
+
+Display:
+
+- Total planned spending.
+- Actual or committed spending where recorded.
+- Remaining budget.
+- Percentage allocated by category.
+- Cost per guest when the relevant guest count and amount are known.
+- Budget overrun warnings.
+- A clear distinction between planned, committed and paid amounts.
+
+The user must be able to change a category allocation and immediately see recalculated totals.
+
+Keep financial calculations in ordinary application code. Gemini must not calculate or silently invent final monetary totals.
+
+Implement validation for negative amounts, missing inputs and invalid allocations. Do not automatically assume that the sum of unconfirmed AI estimates represents a confirmed vendor quote.
+
+### D. Priority Compass and trade-off simulator
+
+Allow users to rank:
+
+- Food quality
+- Guest count
+- Photography and memories
+- Decoration
+- Guest experience
+- Convenience
+
+Allow designated items to be locked as must-preserve priorities.
+
+Provide a simulated budget-overrun workflow with three alternative scenarios:
+
+1. **Protect the Food**
+2. **Protect the Guest List**
+3. **Protect the Memories**
+
+For each scenario, show:
+
+- Categories or line items that change.
+- Original amount.
+- Proposed revised amount.
+- Savings or additional spending.
+- Revised event total.
+- Remaining shortfall or surplus.
+- Protected items that remain unchanged.
+- Consequences and compromises.
+- The assumptions and missing information affecting the calculation.
+
+The scenarios must be genuinely different. They must not simply produce three alternative AI paragraphs.
+
+Gemini may propose candidate changes, but the backend must validate the candidate changes against available financial data, protected items and business rules before presenting them as calculated scenarios.
+
+The user must be able to inspect, select and apply a scenario. Applying one must update the shared event state and all dependent views.
+
+Do not fabricate savings. If the available data cannot support a meaningful calculation, display the missing information and request it.
+
+### E. Event Twin and Ripple Engine — THE SIGNATURE FEATURE
+
+This is the most important part of Bandobast.
+
+Create a visual, interactive dependency graph using React Flow.
+
+Represent event elements as nodes such as:
+
+- Event dates
+- Guest counts
+- Venue
+- Catering
+- Decoration
+- Photography
+- Return gifts
+- Vendor bookings
+- Purchase orders
+- Headcount confirmation
+- Delivery deadlines
+- Event functions
+
+Connect nodes with explicitly defined dependency relationships.
+
+Example:
+
+Wedding guest count → Catering quantity → Catering budget
+
+Wedding guest count → Return gifts → Gift order deadline
+
+Venue booking → Layout confirmation → Decoration setup
+
+Event date → Task deadlines → Vendor confirmation tasks
+
+When an upstream value changes, run deterministic dependency rules and identify all affected downstream nodes.
+
+Support at least these scenarios:
+
+**Scenario 1: Guest count increase**
+
+Change the attendance from 180 to 220.
+
+The application should:
+
+- Update the guest count.
+- Recalculate headcount-dependent financial values from available per-person prices or pricing rules.
+- Identify affected vendor quantities and task deadlines.
+- Check the new attendance against the recorded venue capacity.
+- Highlight affected dependency nodes.
+- Explain the cause of each affected item.
+- Indicate where information is missing.
+
+**Scenario 2: Earlier wedding date**
+
+Move the wedding date earlier by two weeks.
+
+The application should:
+
+- Recalculate date-dependent tasks.
+- Identify newly overdue or urgent tasks.
+- Highlight affected vendor and preparation deadlines.
+- Show the original and revised dates.
+- Identify upstream dependencies that require attention.
+
+**Scenario 3: Vendor quote increase**
+
+Increase a quoted line item by 20%.
+
+The application should:
+
+- Update the applicable financial input in the test scenario.
+- Recalculate the budget.
+- Highlight the changed quote and downstream budget status.
+- Offer the trade-off simulator when the budget is exceeded.
+
+Provide an easy-to-use scenario control so the user can trigger each demonstration without editing source code.
+
+Graph nodes must be clickable. Show a details panel explaining:
+
+- What changed.
+- Why it changed.
+- Which upstream input triggered it.
+- Which data source supports the value.
+- What action is needed next.
+- Whether the information is confirmed, estimated or missing.
+
+Use different node styling and icons for unaffected items, affected items, warnings, blocked tasks and overdue tasks. Do not communicate status using color alone.
+
+The graph must be backed by structured dependency data and actual calculations. It must not merely animate a hardcoded picture or ask Gemini to decide which nodes should change.
+
+### F. Vendor Quote X-Ray
+
+Allow the user to upload supported PDF and image quotations or paste quotation text.
+
+Build a complete workflow for:
+
+1. File validation and upload.
+2. Gemini-powered extraction of available line items and terms.
+3. Structured parsing into a common quote schema.
+4. Validation and review of extracted fields.
+5. Side-by-side comparison of vendor quotations.
+6. Identification of missing or ambiguous fields.
+7. Generation of useful vendor follow-up questions.
+
+Extract available fields such as:
+
+- Vendor name.
+- Quoted date, if present.
+- Line-item descriptions.
+- Quantities.
+- Unit prices.
+- Subtotals.
+- Taxes and GST.
+- Service or staffing charges.
+- Transport and delivery.
+- Overtime.
+- Deposit and payment terms.
+- Cancellation policy.
+- Quote validity period.
+- Included and excluded services.
+
+Do not assume that an absent field is zero, included or not applicable.
+
+Show "Not mentioned — ask vendor" for unavailable quote information.
+
+Calculate per-guest costs only when the necessary total amount and guest quantity are sufficiently supported. Identify the guest count used in the calculation.
+
+Support a quotation comparison table with normalized categories and clear missing-data indicators.
+
+Generate follow-up messages in English, Hindi or Gujarati. These should ask specific questions based on omissions or ambiguity in the quotation.
+
+Messages must remain drafts. Do not claim that a message was sent or that vendor availability was checked.
+
+If the Gemini key is unavailable, demonstrate this feature with a prepared example quotation and a clear demo-mode label. Do not pretend a real uploaded document was processed by AI when it was not.
+
+### G. Data provenance
+
+Every monetary amount and consequential planning value should carry appropriate source metadata.
+
+Use a source classification such as:
+
+- `quoted`: extracted from or entered from a vendor quotation.
+- `user_entered`: supplied or explicitly confirmed by the organizer.
+- `ai_estimate`: suggested by AI and not yet verified.
+- `illustrative`: sample value supplied solely for demonstration.
+
+Store useful metadata where available, such as quote ID, line-item ID, calculation basis and verification status.
+
+Show compact, accessible badges or labels beside values and expose fuller details through a tooltip or details panel.
+
+Calculated values should identify their inputs, for example:
+
+"Calculated from quoted per-person rate × confirmed guest count."
+
+Do not label an AI-generated guess as a vendor quote. Do not treat illustrative seed data as real-world vendor pricing.
+
+### H. Adaptive multi-function timeline
+
+Create separate views for mehendi, sangeet, wedding and reception, together with a combined schedule.
+
+Support:
+
+- Task name and description.
+- Responsible person, if assigned.
+- Start and due dates.
+- Status.
+- Priority.
+- Function.
+- Dependencies.
+- Blocked tasks.
+- Overdue tasks.
+- Completion tracking.
+
+The user must be able to edit tasks and mark them complete.
+
+When event dates or upstream milestones change, recompute the affected dates according to defined scheduling rules. Distinguish automatically recalculated suggestions from user-approved changes.
+
+Clearly communicate impossible or conflicting schedules instead of silently moving tasks to invalid dates.
+
+Provide a calendar export, initially using a valid downloadable `.ics` file. Real Google Calendar synchronization is optional and should only be implemented if it can be tested properly.
+
+### I. Vendor and task coordination
+
+Provide a task checklist for vendor bookings and outstanding decisions.
+
+Allow users to track whether a vendor is:
+
+- Not contacted.
+- Awaiting response.
+- Quote received.
+- Selected by organizer.
+- Booking confirmed by organizer.
+
+Never mark a booking as confirmed merely because the AI recommended a vendor.
+
+Allow the user to export a catering brief or vendor summary containing the relevant headcount, event function, requirements and known constraints.
+
+---
+
+## 5. AI AND BUSINESS LOGIC
+
+Use Gemini where it adds genuine value:
+
+- Understanding natural-language event requirements.
+- Suggesting relevant planning tasks.
+- Extracting quotation information from PDFs and images.
+- Identifying missing information in supplied quotations.
+- Explaining dependency consequences in plain language.
+- Proposing candidate trade-off scenarios.
+- Drafting vendor questions.
+- Personalizing recommendations around the user's priorities.
+
+Use deterministic application code for:
+
+- Budget arithmetic.
+- Cost allocations and totals.
+- Per-guest calculations.
+- Budget variance.
+- Dependency propagation.
+- Date arithmetic.
+- Deadline checks.
+- Capacity comparisons.
+- Validation of proposed scenario changes.
+- State updates and persistence.
+
+Use structured JSON output and Pydantic validation for AI results. Handle malformed outputs, timeouts, API errors and missing values gracefully.
+
+Sanitize AI-generated content before rendering it. Never execute model output as code or unsafe HTML.
+
+Provide useful error states and retry options when the AI service fails.
+
+When credentials are unavailable, use the demo data and deterministic fallback workflows where appropriate. Clearly disclose when AI-assisted processing is unavailable rather than faking successful AI results.
+
+---
+
+## 6. DATA MODEL AND STATE MANAGEMENT
+
+Design coherent models for:
+
+- Event
+- EventFunction
+- BudgetCategory
+- BudgetLineItem
+- EventPriority
+- ProtectedRequirement
+- Vendor
+- VendorQuote
+- QuoteLineItem
+- Task
+- TaskDependency
+- Scenario
+- ScenarioChange
+- ProvenanceRecord
+
+Keep the current event state, original values and approved scenario changes distinguishable.
+
+The budget, Ripple Engine, timeline and dashboard must read from the same underlying event data.
+
+Use a centralized and typed state strategy on the frontend. Avoid keeping different hardcoded versions of the budget in separate components.
+
+Use Supabase PostgreSQL for persistence, with an appropriate relational schema and migrations or setup SQL.
+
+Include ownership and access-control considerations in the database design. Use secure configuration for database access and avoid putting privileged database credentials in the frontend.
+
+For local demonstration, the prepared event should work without requiring the user to configure a database first. Use a clear development/demo mode and ensure changes behave consistently within that mode.
+
+---
+
+## 7. SAMPLE DATA AND DEMONSTRATION
+
+Create a realistic but explicitly fictional sample wedding:
+
+- Four functions: mehendi, sangeet, wedding and reception.
+- Starting illustrative budget: ₹3,00,000.
+- Initial illustrative guest count: 180.
+- Revised guest count scenario: 220.
+- A separate scenario in which a supplier quote increases by 20%.
+- Example venue capacity, if supplied, clearly labelled as illustrative.
+- A few sample vendor quotations with different inclusions.
+- Tasks with meaningful dependencies and deadlines.
+- Organizer priorities and protected requirements.
+- Enough data for the budget charts, quote comparison and ripple graph to be useful.
+
+Every sample value must be identified as illustrative. Do not present fictional vendors, prices or capacities as real.
+
+Provide a reset-demo-data action so the primary demonstration can be reproduced.
+
+The main demonstration must work in this order:
+
+1. Open the sample event.
+2. Inspect the budget and priorities.
+3. Increase the guest count.
+4. Inspect the Ripple Engine and its affected dependencies.
+5. Trigger the vendor price increase.
+6. Generate and compare the three trade-off scenarios.
+7. Apply one scenario.
+8. Verify that the budget and timeline reflect the selected plan.
+9. Inspect a sample vendor quotation and its provenance indicators.
+
+This entire workflow must work without requiring an external vendor account or real reservation.
+
+---
+
+## 8. QUALITY, TESTING AND SECURITY
+
+Do not consider the project complete merely because the frontend renders.
+
+### Backend tests
+
+Write automated tests for:
+
+- Budget totals and remaining balance.
+- Per-guest calculations and missing inputs.
+- Budget-overrun calculations.
+- Protected requirements remaining unchanged.
+- Valid and invalid scenario changes.
+- Dependency propagation.
+- Event date changes and overdue tasks.
+- Capacity checks.
+- Quote parsing validation.
+- Provenance retention.
+
+### Frontend and integration tests
+
+Test:
+
+- Navigation and responsive layout.
+- Event setup and form validation.
+- Budget edits and live recalculation.
+- Ripple Engine scenario interactions.
+- Applying and reversing a scenario where supported.
+- Quote upload validation and error states.
+- Timeline interactions.
+- Demo reset.
+- Keyboard navigation for essential workflows.
+
+Use appropriate frontend tests and browser-based end-to-end testing if tooling is available.
+
+### Security
+
+- Never expose Gemini credentials in frontend bundles.
+- Validate uploads by file size, extension, content type and actual parsing result as appropriate.
+- Avoid executing untrusted text or HTML.
+- Validate request payloads and scenario mutations on the backend.
+- Avoid logging secrets or unnecessary sensitive document content.
+- Configure access controls for persisted user data.
+- Add rate limiting or reasonable protection for AI endpoints where practical.
+
+### Accessibility
+
+- Semantic HTML.
+- Visible focus states.
+- Form labels and useful validation messages.
+- Sufficient color contrast.
+- Keyboard-accessible navigation and controls.
+- Textual explanations for charts and dependency graphs.
+- Status labels that do not depend on color alone.
+
+### Code quality
+
+- TypeScript types rather than avoidable `any` usage.
+- Small, reusable components.
+- Clear separation between UI, business rules, AI services and persistence.
+- Consistent formatting and linting.
+- No dead navigation links, fake submit buttons, unresolved imports or avoidable console errors.
+- No placeholder screens presented as finished features.
+
+---
+
+## 9. PROJECT DOCUMENTATION
+
+Create a README that includes:
+
+1. Product overview and intended persona.
+2. Architecture and major components.
+3. Feature list.
+4. Installation and local setup.
+5. Environment variable instructions.
+6. Demo-mode instructions.
+7. Backend and frontend run commands.
+8. Database setup.
+9. AI integration setup.
+10. Automated test and lint commands.
+11. Deployment instructions.
+12. Known limitations.
+13. Security and data provenance design.
+14. A requirement-to-feature mapping for the PromptWars challenge.
+
+Create `.env.example`, `.gitignore` and any required setup scripts. Never commit real API keys.
+
+---
+
+## 10. IMPLEMENTATION PROCESS
+
+Work through these phases in order:
+
+**Phase 1 — Inspect and prepare**
+- Inspect the existing workspace and installed tooling.
+- Select a consistent architecture.
+- Establish the frontend and backend projects.
+- Create a small implementation plan.
+
+**Phase 2 — Build the application foundation**
+- Establish the visual design system.
+- Implement navigation, dashboard, event setup and shared data structures.
+- Add the clearly labelled example wedding.
+
+**Phase 3 — Implement real functionality**
+- Build budget calculations.
+- Implement the dependency engine and interactive Ripple Engine.
+- Implement priorities and deterministic scenario validation.
+- Build the timeline and date recalculation logic.
+
+**Phase 4 — Add Gemini and quotation handling**
+- Integrate server-side AI calls.
+- Add structured extraction, schema validation, source attribution and quote comparison.
+- Ensure useful fallback behaviour without credentials.
+
+**Phase 5 — Verify and polish**
+- Run frontend and backend checks.
+- Run the automated tests.
+- Open the web application in a browser if browser tooling is available.
+- Test the full demonstration from beginning to end.
+- Fix errors found during testing.
+- Improve responsive layout, loading states, accessibility and error handling.
+
+**Phase 6 — Document**
+- Finish the README and environment templates.
+- Provide exact commands to run the application locally.
+- Summarize what is genuinely working and disclose any unfinished integrations.
+
+Do not claim a test, deployment or integration succeeded unless it was actually executed and verified.
+
+## FINAL ACCEPTANCE CRITERIA
+
+The project is ready for its initial submission when:
+
+- The actual web application starts successfully.
+- The interface consistently uses the specified warm ivory, olive, sage, marigold and terracotta palette.
+- The sample event loads and can be reset.
+- Budget changes recalculate correctly.
+- Guest-count and date changes propagate through real dependency rules.
+- The graph makes affected nodes and their causes understandable.
+- Trade-off scenarios are calculated, validated and can be applied to the event.
+- Quote processing distinguishes extracted facts, entered values, estimates and unknowns.
+- The adaptive timeline reflects approved changes.
+- The application works in demo mode without an API key.
+- The essential automated tests pass.
+- Setup instructions and known limitations are documented.
+
+**Priority order:** correctness of the connected planning workflow first, quality of the visual experience second, AI capabilities third, and additional integrations after the core is reliable.
+
+Begin by inspecting the workspace, then implement the application. Do not return only a proposal or a list of recommendations.
+### MULTI-EVENT SUPPORT — MANDATORY REQUIREMENT
+
+Bandobast must be a reusable celebration and event-planning platform, not a wedding-only application.
+
+During event creation, let the user select an event type:
+
+- Wedding
+- Engagement
+- Birthday
+- Anniversary
+- Family get-together or reunion
+- Community event or festival
+- Other / Custom event
+
+Implement event-specific templates that configure appropriate budget categories, planning questions, default task checklists, vendor requirements and timelines.
+
+Examples:
+- Weddings support multiple functions, function-specific guest counts and cross-function dependencies.
+- Birthdays support cake, decorations, catering, entertainment and invitations.
+- Get-togethers support food, venue, attendance, shared expenses and transport.
+- Community events support venue logistics, volunteers, equipment, permissions where applicable and shared budgets.
+
+All event types must use the same underlying budget engine, provenance system, timeline engine, scenario simulator and dependency-propagation engine. Do not create separate hardcoded applications for each event type.
+
+The selected event template should influence the initial suggestions and default categories, but users must be able to customize them.
+
+The Ripple Engine must work for all supported event types using configurable dependencies rather than wedding-specific assumptions.
+
+Provide at least two usable demonstration templates: a multi-function Indian wedding and a birthday party or community gathering. The main polished demonstration can remain the multi-function wedding.
+
+The application must also support a custom event through user-defined functions, budget categories, tasks and dependencies. Do not assume every event needs multiple functions, a caterer or a venue booking.

@@ -1,0 +1,56 @@
+{
+  "id": "/",
+  "name": "Bandobast - Event Operations Platform",
+  "short_name": "Bandobast",
+  "description": "Intelligent event operations platform connecting budgets, vendors, guest counts, and ripple effects.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#FAF7F0",
+  "theme_color": "#405B43",
+  "icons": [
+    {
+      "src": "/icons/bandobast-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/bandobast-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/bandobast-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/bandobast-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "categories": ["productivity", "events", "lifestyle"],
+  "shortcuts": [
+    {
+      "name": "Ripple Engine",
+      "url": "/?tab=ripple",
+      "description": "Simulate guest, date, and vendor changes"
+    },
+    {
+      "name": "Budget Studio",
+      "url": "/?tab=budget",
+      "description": "Inspect and manage celebration budgets"
+    },
+    {
+      "name": "Timeline",
+      "url": "/?tab=timeline",
+      "description": "View multi-function milestones"
+    }
+  ]
+}

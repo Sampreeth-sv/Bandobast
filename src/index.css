@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ivory: #FAF7F0;
+  --color-cream: #FFFDF9;
+  --color-olive: #405B43;
+  --color-olive-dark: #324734;
+  --color-olive-light: #EDF3EC;
+  --color-sage: #DCE6D6;
+  --color-sage-light: #F2F6F0;
+  --color-marigold: #E7A83E;
+  --color-marigold-light: #FEF7EB;
+  --color-terracotta: #C76F50;
+  --color-terracotta-light: #FAECE7;
+  --color-espresso: #302F28;
+  --color-muted: #77756B;
+  --color-border-soft: #E7E0D3;
+
+  --font-serif: "Playfair Display", Georgia, serif;
+  --font-sans: "Plus Jakarta Sans", system-ui, -apple-system, sans-serif;
+}
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: #FAF7F0;
+  color: #302F28;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, .font-display {
+  font-family: var(--font-serif);
+}
+
+/* Custom Scrollbar for celebration dashboard */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #FAF7F0;
+}
+::-webkit-scrollbar-thumb {
+  background: #DCE6D6;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #77756B;
+}
+
+/* React Flow styles customization for warm theme */
+.react-flow__attribution {
+  display: none !important;
+}
+.react-flow__handle {
+  width: 10px !important;
+  height: 10px !important;
+  background-color: #405B43 !important;
+  border: 2px solid #FAF7F0 !important;
+}
