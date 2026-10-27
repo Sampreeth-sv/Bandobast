@@ -20,6 +20,19 @@ const aiRateLimiter = createRateLimiter({
 
 aiRouter.use(aiRateLimiter);
 
+// GenAI client singleton initializer
+let genAIInstance: GoogleGenAI | null = null;
+function getGenAIClient(): GoogleGenAI | null {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey === 'MY_GEMINI_API_KEY' || apiKey.trim() === '') {
+    return null;
+  }
+  if (!genAIInstance) {
+    genAIInstance = new GoogleGenAI({ apiKey });
+  }
+  return genAIInstance;
+}
+
 // Timeout helper: default 15 seconds
 function withTimeout<T>(promise: Promise<T>, ms = 15000, fallbackMessage = 'Request timed out'): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -36,12 +49,30 @@ function withTimeout<T>(promise: Promise<T>, ms = 15000, fallbackMessage = 'Requ
   });
 }
 
-function getGenAIClient(): GoogleGenAI | null {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey || apiKey === 'MY_GEMINI_API_KEY' || apiKey.trim() === '') {
-    return null;
+// Helper for resilient Gemini API calls: attempts gemini-3.5-flash first,
+// falls back to gemini-3.5-flash-lite if demand spikes (503), then safe fallback.
+async function generateWithGemini(
+  genAI: GoogleGenAI,
+  params: { contents: any; config?: any },
+  timeoutMs = 15000
+): Promise<any> {
+  const models = ['gemini-3.5-flash', 'gemini-3.5-flash-lite'];
+  let lastError: any;
+
+  for (const model of models) {
+    try {
+      const call = genAI.models.generateContent({
+        ...params,
+        model
+      });
+      return await withTimeout(call, timeoutMs, `${model} call timed out`);
+    } catch (err: any) {
+      lastError = err;
+      console.warn(`[AI Routes] Model ${model} encountered error:`, err?.status || err?.message || err);
+    }
   }
-  return new GoogleGenAI({ apiKey });
+
+  throw lastError;
 }
 
 // Health check endpoint
@@ -167,16 +198,17 @@ Return strictly valid JSON matching this schema:
       ];
     }
 
-    const aiCall = genAI.models.generateContent({
-      model: 'gemini-2.0-flash',
-      contents: contents,
-      config: {
-        systemInstruction,
-        responseMimeType: 'application/json'
-      }
-    });
-
-    const response = await withTimeout(aiCall, 18000, 'AI quote extraction exceeded time limit');
+    const response = await generateWithGemini(
+      genAI,
+      {
+        contents: contents,
+        config: {
+          systemInstruction,
+          responseMimeType: 'application/json'
+        }
+      },
+      18000
+    );
     const parsedData = JSON.parse(response.text || '{}');
 
     // Ensure status and unverified provenance are enforced
@@ -240,12 +272,13 @@ ${(missingFields || []).join('\n')}
 Additional context: ${context || 'Multi-function family celebration'}
 Keep the tone warm, clear, and professional. Output ONLY the ready-to-send draft message.`;
 
-    const aiCall = genAI.models.generateContent({
-      model: 'gemini-2.0-flash',
-      contents: prompt
-    });
-
-    const response = await withTimeout(aiCall, 15000, 'Vendor question drafting timed out');
+    const response = await generateWithGemini(
+      genAI,
+      {
+        contents: prompt
+      },
+      15000
+    );
 
     return res.json({
       success: true,
@@ -317,15 +350,16 @@ Rules:
       parts: [{ text: `${message}\n(Current Target Budget: ₹${currentBudget.toLocaleString('en-IN')})` }]
     });
 
-    const aiCall = genAI.models.generateContent({
-      model: 'gemini-2.0-flash',
-      contents: chatContents,
-      config: {
-        systemInstruction
-      }
-    });
-
-    const response = await withTimeout(aiCall, 15000, 'AI chat response timed out');
+    const response = await generateWithGemini(
+      genAI,
+      {
+        contents: chatContents,
+        config: {
+          systemInstruction
+        }
+      },
+      15000
+    );
 
     return res.json({
       success: true,
@@ -493,15 +527,16 @@ Return strictly valid JSON matching this schema:
   }
 ]`;
 
-        const aiCall = genAI.models.generateContent({
-          model: 'gemini-2.0-flash',
-          contents: prompt,
-          config: {
-            responseMimeType: 'application/json'
-          }
-        });
-
-        const aiResponse = await withTimeout(aiCall, 12000, 'AI vendor recommendation timed out');
+        const aiResponse = await generateWithGemini(
+          genAI,
+          {
+            contents: prompt,
+            config: {
+              responseMimeType: 'application/json'
+            }
+          },
+          15000
+        );
         const parsed = JSON.parse(aiResponse.text || '[]');
 
         if (Array.isArray(parsed) && parsed.length > 0) {

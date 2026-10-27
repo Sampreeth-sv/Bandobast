@@ -43,8 +43,8 @@ Designed around an authentic, warm Indian celebratory aesthetic:
 - **PWA Capabilities:** Progressive Web App with `manifest.json`, Service Worker offline caching, installation prompt banner, and viewport zoom accessibility.
 - **Backend Server:** Node.js Express server running on port 3000 with Vite middleware in development mode (`tsx server.ts`) and static asset serving in production.
 - **API Security & Validation:** Strict runtime request schema validation via **Zod**, in-memory sliding-window IP rate limiting, and request timeouts.
-- **AI & LLM Integration:** Google Gen AI SDK (`@google/genai`) using `gemini-2.0-flash` with structured JSON output schemas and deterministic demo fallbacks.
-- **Testing:** Native Node.js test runner (`node:test`, `node:assert`) with 17 automated tests across 6 test suites.
+- **AI & LLM Integration:** Google Gen AI SDK (`@google/genai`) using `gemini-3.5-flash` (with automatic fallback to `gemini-3.5-flash-lite` and offline deterministic templates) with structured JSON output schemas and verified unverified provenance attribution.
+- **Testing:** Native Node.js test runner (`node:test`, `node:assert`) with 23 automated tests across 8 test suites covering Zod validation, custom-event workflows, priority preservation, live/fallback AI extraction, and RFC 5545 calendar time-zone handling.
 
 ---
 
@@ -57,12 +57,12 @@ Designed around an authentic, warm Indian celebratory aesthetic:
 - **Fast Navigation Grid:** Instant access cards to the Ripple Engine, Budget Studio, Quote X-Ray, and Timeline.
 
 ### B. Gen AI Place, Catering & Photography Recommender
-- Powered by `gemini-2.0-flash` with budget-scaled illustrative databases.
+- Powered by `gemini-3.5-flash` (with `gemini-3.5-flash-lite` resiliency) with budget-scaled illustrative databases.
 - Clearly flags recommendations with `isIllustrativeDemo` and `verificationStatus: unverified`.
 - **1-Click "Add to Event Budget":** Injects the recommended vendor or venue dynamically into the matching budget category with unverified provenance badges.
 
 ### C. Bandobast AI Advisor Chat
-- Interactive conversation interface with Gemini 2.0 Flash.
+- Interactive conversation interface with Gemini 3.5 Flash.
 - In-chat budget adjuster allowing users to adjust their budget dynamically during the consultation.
 - In-memory recommendation caching to eliminate duplicate API requests.
 
@@ -98,6 +98,7 @@ Designed around an authentic, warm Indian celebratory aesthetic:
 - Multi-function filtering across scheduled ceremonies and celebrations.
 - Lead-time recomputation when dates shift.
 - Downloadable standard `.ics` iCalendar file with RFC 5545 text escaping and time span formatting.
+- **Indian Standard Time (IST) Time-Zone Integrity:** Embeds standard `VTIMEZONE` for `Asia/Kolkata` (`+05:30`) and formats `DTSTART;TZID=Asia/Kolkata` and `DTEND;TZID=Asia/Kolkata` without erroneous UTC `Z` suffixes, guaranteeing that an evening event scheduled for 6:00 PM IST appears accurately at 6:00 PM IST across calendar software (Google Calendar, Outlook, Apple Calendar) without UTC drift.
 
 ---
 
@@ -112,7 +113,18 @@ Designed around an authentic, warm Indian celebratory aesthetic:
 # 1. Install dependencies
 npm install
 
-# 2. Run automated test suites (17 tests across 6 suites)
+# 2. Run automated test suites (23 tests across 8 suites)
+npm test
+
+# 3. Type-check code
+npm run lint
+
+# 4. Production build
+npm run build
+
+# 5. Start development server (serves frontend + Express API)
+npm run dev
+```
 npm test
 
 # 3. Type check

@@ -194,8 +194,10 @@ export function propagateRippleChanges(
     let catExtra = 0;
 
     if (cat.lineItems && cat.lineItems.length > 0) {
+      let perGuestItemsFound = false;
       cat.lineItems.forEach(item => {
         if (item.unitType === 'per_guest') {
+          perGuestItemsFound = true;
           const unitCost = typeof item.unitCost === 'number' && item.unitCost > 0
             ? item.unitCost
             : Math.round(item.plannedAmount / baseGuestCount);
@@ -203,6 +205,12 @@ export function propagateRippleChanges(
           catExtra += itemExtra;
         }
       });
+
+      // If no explicit 'per_guest' flags are set but category is food/catering/gifts, scale proportionally
+      if (!perGuestItemsFound && isCategoryOfKind(cat, ['catering', 'food', 'meal', 'feast', 'buffet', 'dinner', 'lunch', 'refreshment', 'gifts', 'favors', 'invitations'])) {
+        const unitCost = Math.round(cat.plannedAmount / baseGuestCount);
+        catExtra = simulation.guestCountDelta * unitCost;
+      }
     } else if (isCategoryOfKind(cat, ['catering', 'food', 'meal', 'feast', 'buffet', 'dinner', 'lunch', 'refreshment', 'gifts', 'favors', 'invitations'])) {
       // Proportional per-guest estimate when no line items are explicitly populated
       const unitCost = Math.round(cat.plannedAmount / baseGuestCount);
@@ -484,12 +492,12 @@ export function calculateTradeoffScenarios(
   const generalPool = [...decorCats, ...otherFlexibleCats, ...giftCats, ...photoCats].filter(c => c.plannedAmount > 0);
 
   // Helper to safely apply reductions up to available planned amount without negative values
-  const applySafeReductions = (allocations: { cat: BudgetCategory; weight: number; rationale: string }[]) => {
+  const applySafeReductions = (allocations: { cat?: BudgetCategory; weight: number; rationale: string }[]) => {
     const changes: ScenarioChange[] = [];
     let accumulatedSavings = 0;
 
     allocations.forEach(({ cat, weight, rationale }) => {
-      if (cat.plannedAmount <= 0) return;
+      if (!cat || cat.plannedAmount <= 0 || isProtectedCategory(cat)) return;
       const desiredReduction = Math.round(targetSavings * weight);
       const safeReduction = Math.min(cat.plannedAmount, Math.max(0, desiredReduction));
 
@@ -641,29 +649,60 @@ export function applyScenarioToEvent(
     // Recalculate line items proportionally if present
     let updatedLineItems = cat.lineItems;
     if (cat.lineItems && cat.lineItems.length > 0 && cat.plannedAmount > 0) {
-      const ratio = change.revisedAmount / cat.plannedAmount;
-      updatedLineItems = cat.lineItems.map(item => {
-        // Respect item-level protection
-        if (item.isProtected) return item;
-        const revisedLine = Math.round(item.plannedAmount * ratio);
-        return {
-          ...item,
-          plannedAmount: revisedLine,
-          provenance: {
-            ...item.provenance,
-            source: 'user_entered',
-            verified: false, // Section 1 & 3: AI/Scenario estimates are unverified until confirmed
-            notes: `Applied Scenario: ${scenario.title} (${change.delta >= 0 ? '+' : ''}${change.delta})`,
-            lastUpdated: new Date().toISOString().split('T')[0]
-          }
-        };
-      });
+      const nonProtectedItems = cat.lineItems.filter(i => !i.isProtected);
+      const nonProtectedSum = nonProtectedItems.reduce((acc, item) => acc + item.plannedAmount, 0);
+      const totalReduction = cat.plannedAmount - change.revisedAmount;
 
-      // Adjust rounding discrepancy so line item sum matches category plannedAmount exactly
-      const lineSum = updatedLineItems.reduce((acc, item) => acc + item.plannedAmount, 0);
-      const diff = change.revisedAmount - lineSum;
-      if (diff !== 0 && updatedLineItems.length > 0) {
-        updatedLineItems[0].plannedAmount += diff;
+      if (nonProtectedItems.length > 0 && nonProtectedSum > 0 && totalReduction !== 0) {
+        updatedLineItems = cat.lineItems.map(item => {
+          if (item.isProtected) return item;
+          const proportion = item.plannedAmount / nonProtectedSum;
+          const itemReduction = Math.round(totalReduction * proportion);
+          const revisedPlanned = Math.max(0, item.plannedAmount - itemReduction);
+          return {
+            ...item,
+            plannedAmount: revisedPlanned,
+            provenance: {
+              ...item.provenance,
+              source: 'user_entered',
+              verified: false, // Section 1 & 3: AI/Scenario estimates are unverified until confirmed
+              notes: `Applied Scenario: ${scenario.title} (${change.delta >= 0 ? '+' : ''}${change.delta})`,
+              lastUpdated: new Date().toISOString().split('T')[0]
+            }
+          };
+        });
+
+        // Exact sum correction for non-protected items to eliminate rounding drift
+        const currentSum = updatedLineItems.reduce((acc, item) => acc + item.plannedAmount, 0);
+        const diff = change.revisedAmount - currentSum;
+        if (diff !== 0) {
+          const target = updatedLineItems.find(i => !i.isProtected) || updatedLineItems[0];
+          target.plannedAmount = Math.max(0, target.plannedAmount + diff);
+        }
+      } else {
+        const ratio = change.revisedAmount / cat.plannedAmount;
+        updatedLineItems = cat.lineItems.map(item => {
+          if (item.isProtected) return item;
+          const revisedLine = Math.max(0, Math.round(item.plannedAmount * ratio));
+          return {
+            ...item,
+            plannedAmount: revisedLine,
+            provenance: {
+              ...item.provenance,
+              source: 'user_entered',
+              verified: false,
+              notes: `Applied Scenario: ${scenario.title} (${change.delta >= 0 ? '+' : ''}${change.delta})`,
+              lastUpdated: new Date().toISOString().split('T')[0]
+            }
+          };
+        });
+
+        const lineSum = updatedLineItems.reduce((acc, item) => acc + item.plannedAmount, 0);
+        const diff = change.revisedAmount - lineSum;
+        if (diff !== 0 && updatedLineItems.length > 0) {
+          const target = updatedLineItems.find(i => !i.isProtected) || updatedLineItems[0];
+          target.plannedAmount = Math.max(0, target.plannedAmount + diff);
+        }
       }
     }
 
@@ -714,12 +753,21 @@ function escapeIcsText(str: string): string {
 export function exportIcsCalendar(event: CelebrationEvent): string {
   const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
 
-  // Helper to parse time string like "10:00 AM - 2:00 PM" or "6:30 PM"
+  // Helper to parse time string like "10:00 AM - 2:00 PM" or "6:00 PM"
+  // Strictly preserves Indian Standard Time (Asia/Kolkata) without UTC drift
   const parseTimeSpan = (dateStr: string, timeStr?: string): { startIso: string; endIso: string } => {
-    const d = new Date(dateStr);
-    const y = d.getFullYear();
-    const m = pad(d.getMonth() + 1);
-    const day = pad(d.getDate());
+    let y: string, m: string, day: string;
+    if (typeof dateStr === 'string' && /^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+      const parts = dateStr.split('T')[0].split('-');
+      y = parts[0];
+      m = parts[1];
+      day = parts[2];
+    } else {
+      const d = new Date(dateStr);
+      y = String(d.getFullYear());
+      m = pad(d.getMonth() + 1);
+      day = pad(d.getDate());
+    }
 
     let startHour = 10;
     let startMin = 0;
@@ -758,8 +806,8 @@ export function exportIcsCalendar(event: CelebrationEvent): string {
       }
     }
 
-    const startIso = `${y}${m}${day}T${pad(startHour)}${pad(startMin)}00Z`;
-    const endIso = `${y}${m}${day}T${pad(endHour)}${pad(endMin)}00Z`;
+    const startIso = `${y}${m}${day}T${pad(startHour)}${pad(startMin)}00`;
+    const endIso = `${y}${m}${day}T${pad(endHour)}${pad(endMin)}00`;
     return { startIso, endIso };
   };
 
@@ -771,7 +819,18 @@ export function exportIcsCalendar(event: CelebrationEvent): string {
     'PRODID:-//Bandobast//Intelligent Event Operations Platform//EN',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
-    `X-WR-CALNAME:${escapeIcsText(event.name)}`
+    `X-WR-CALNAME:${escapeIcsText(event.name)}`,
+    'X-WR-TIMEZONE:Asia/Kolkata',
+    'BEGIN:VTIMEZONE',
+    'TZID:Asia/Kolkata',
+    'X-LIC-LOCATION:Asia/Kolkata',
+    'BEGIN:STANDARD',
+    'TZOFFSETFROM:+0530',
+    'TZOFFSETTO:+0530',
+    'TZNAME:IST',
+    'DTSTART:19700101T000000',
+    'END:STANDARD',
+    'END:VTIMEZONE'
   ];
 
   // Add event functions
@@ -781,8 +840,8 @@ export function exportIcsCalendar(event: CelebrationEvent): string {
       'BEGIN:VEVENT',
       `UID:func-${func.id}@bandobast.app`,
       `DTSTAMP:${stampNow}`,
-      `DTSTART:${startIso}`,
-      `DTEND:${endIso}`,
+      `DTSTART;TZID=Asia/Kolkata:${startIso}`,
+      `DTEND;TZID=Asia/Kolkata:${endIso}`,
       `SUMMARY:${escapeIcsText(`${event.name} - ${func.name}`)}`,
       `LOCATION:${escapeIcsText(func.venueName)}`,
       `DESCRIPTION:${escapeIcsText(`${func.description} | Expected Guests: ${func.guestCount} | Attire: ${func.attireTheme || 'Festive'}`)}`,
@@ -798,8 +857,8 @@ export function exportIcsCalendar(event: CelebrationEvent): string {
       'BEGIN:VEVENT',
       `UID:task-${task.id}@bandobast.app`,
       `DTSTAMP:${stampNow}`,
-      `DTSTART:${startIso}`,
-      `DTEND:${endIso}`,
+      `DTSTART;TZID=Asia/Kolkata:${startIso}`,
+      `DTEND;TZID=Asia/Kolkata:${endIso}`,
       `SUMMARY:${escapeIcsText(`Deadline: ${task.name}`)}`,
       `DESCRIPTION:${escapeIcsText(`${task.description} | Assigned: ${task.assignedTo || 'Unassigned'} | Priority: ${task.priority.toUpperCase()}`)}`,
       task.status === 'completed' ? 'STATUS:COMPLETED' : 'STATUS:CONFIRMED',
