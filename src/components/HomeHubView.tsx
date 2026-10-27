@@ -409,7 +409,7 @@ export const HomeHubView: React.FC<HomeHubViewProps> = ({
                         {rec.category}
                       </span>
                       <span className="bg-[#EDF3EC] text-[#405B43] px-2 py-0.5 rounded-full text-[10px] font-bold">
-                        {rec.matchScore}% Match
+                        Illustrative Sample
                       </span>
                     </div>
 
@@ -417,13 +417,12 @@ export const HomeHubView: React.FC<HomeHubViewProps> = ({
                       {rec.name}
                     </h4>
 
-                    <div className="flex items-center gap-2 mt-1 text-xs text-[#77756B]">
-                      <span className="flex items-center gap-1 text-[#E7A83E]">
-                        <Star className="w-3 h-3 fill-[#E7A83E]" />
-                        <span className="font-bold text-[#302F28]">{rec.rating}</span>
+                    <div className="flex items-center gap-2 mt-1 text-xs text-[#5A584F]">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-900 border border-amber-200">
+                        Demo Data (Unverified)
                       </span>
                       <span>•</span>
-                      <span>{rec.reviewsCount} verified reviews</span>
+                      <span className="text-[11px] text-[#5A584F]">{rec.city}</span>
                     </div>
 
                     <p className="text-xs text-[#526354] mt-2.5 leading-relaxed line-clamp-3">

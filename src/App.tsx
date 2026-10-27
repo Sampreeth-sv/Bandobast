@@ -23,7 +23,7 @@ import { PrioritiesView } from './components/PrioritiesView';
 import { SimulateChangeModal } from './components/SimulateChangeModal';
 import { TradeoffSimulatorModal } from './components/TradeoffSimulatorModal';
 import { EventWizardModal } from './components/EventWizardModal';
-import { calculateBudgetTotals, calculateEventReadiness } from './services/rippleEngine';
+import { calculateBudgetTotals, calculateEventReadiness, propagateRippleChanges } from './services/rippleEngine';
 
 const INITIAL_CHAT_SESSIONS: ChatSession[] = [
   {
@@ -300,10 +300,18 @@ How can I assist today? You can:
 
   // 1-Click Add Recommended Vendor/Place directly to Event Ledger
   const handleAddVendorToLedger = (rec: VendorRecommendation) => {
-    const targetCategoryId = 
-      rec.category === 'catering' ? 'cat-catering' :
-      rec.category === 'venue' ? 'cat-venue' :
-      rec.category === 'photography' ? 'cat-photo' : 'cat-decor';
+    // Dynamically match category without hardcoded ID assumption
+    const matchingCat = activeEvent.categories.find(c => {
+      const name = c.name.toLowerCase();
+      const id = c.id.toLowerCase();
+      if (rec.category === 'catering') return name.includes('catering') || name.includes('food') || id.includes('catering');
+      if (rec.category === 'venue') return name.includes('venue') || name.includes('lawn') || name.includes('hall') || id.includes('venue');
+      if (rec.category === 'photography') return name.includes('photo') || name.includes('media') || name.includes('cinema') || id.includes('photo');
+      if (rec.category === 'decor') return name.includes('decor') || name.includes('floral') || id.includes('decor');
+      return false;
+    }) || activeEvent.categories[0];
+
+    const targetCategoryId = matchingCat ? matchingCat.id : activeEvent.categories[0]?.id || 'cat-general';
 
     const newLineItem: BudgetLineItem = {
       id: `li-rec-${Date.now()}`,
@@ -318,10 +326,10 @@ How can I assist today? You can:
       isProtected: false,
       provenance: {
         source: 'ai_estimate',
-        calculationBasis: `Suggested by Gen AI Recommendation Engine based on ₹${activeEvent.totalBudget.toLocaleString('en-IN')} budget`,
-        verified: true,
+        calculationBasis: `Suggested by AI Recommender based on ₹${activeEvent.totalBudget.toLocaleString('en-IN')} budget (Unverified Estimate)`,
+        verified: false, // Section 1: AI-generated estimates unverified by default
         lastUpdated: new Date().toISOString().split('T')[0],
-        notes: `Vendor contact: ${rec.contactName || 'Manager'} (${rec.contactNumber || 'Available'})`
+        notes: `Vendor suggestion: ${rec.name}. Fictional illustrative profile pending verification.`
       }
     };
 
@@ -443,6 +451,27 @@ How can I assist today? You can:
               <VendorQuotesView
                 event={activeEvent}
                 onAddQuoteToEvent={handleAddQuoteToEvent}
+                onUpdateQuoteStatus={(quoteId, status, verified) => {
+                  const updatedQuotes = activeEvent.quotes.map(q => {
+                    if (q.id !== quoteId) return q;
+                    return {
+                      ...q,
+                      status,
+                      provenance: {
+                        ...q.provenance,
+                        verified,
+                        lastUpdated: new Date().toISOString().split('T')[0]
+                      }
+                    };
+                  });
+                  const updated = {
+                    ...activeEvent,
+                    quotes: updatedQuotes,
+                    updatedAt: new Date().toISOString()
+                  };
+                  updated.readinessScore = calculateEventReadiness(updated).score;
+                  handleUpdateCurrentEvent(updated);
+                }}
               />
             )}
 
@@ -474,14 +503,18 @@ How can I assist today? You can:
         />
       )}
 
-      {showTradeoffModal && (
-        <TradeoffSimulatorModal
-          event={activeEvent}
-          overrunAmount={budget.overrunAmount}
-          onApplyScenario={(updated) => handleUpdateCurrentEvent(updated)}
-          onClose={() => setShowTradeoffModal(false)}
-        />
-      )}
+      {showTradeoffModal && (() => {
+        const simResult = propagateRippleChanges(activeEvent, activeEvent.activeSimulation);
+        const effectiveOverrun = simResult.overrunAmount > 0 ? simResult.overrunAmount : budget.overrunAmount;
+        return (
+          <TradeoffSimulatorModal
+            event={activeEvent}
+            overrunAmount={effectiveOverrun}
+            onApplyScenario={(updated) => handleUpdateCurrentEvent(updated)}
+            onClose={() => setShowTradeoffModal(false)}
+          />
+        );
+      })()}
 
       {showNewEventModal && (
         <EventWizardModal

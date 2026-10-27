@@ -56,16 +56,20 @@ export const SimulateChangeModal: React.FC<SimulateChangeModalProps> = ({
   const isOverCapacity = currentTotalGuests > maxVenueCapacity;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs"
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+    >
       <div 
         className="bg-[#FFFDF9] border border-[#E7E0D3] rounded-3xl max-w-xl w-full p-6 sm:p-8 shadow-2xl relative animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto"
         role="dialog"
         aria-modal="true"
+        aria-labelledby="simulate-modal-title"
       >
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 text-[#77756B] hover:text-[#302F28] p-1.5 rounded-xl hover:bg-[#FAF7F0]"
-          aria-label="Close"
+          className="absolute top-5 right-5 text-[#5A584F] hover:text-[#302F28] p-1.5 rounded-xl hover:bg-[#FAF7F0] focus-visible:ring-2 focus-visible:ring-[#405B43] cursor-pointer"
+          aria-label="Close dialog"
         >
           <X className="w-5 h-5" />
         </button>
@@ -75,8 +79,8 @@ export const SimulateChangeModal: React.FC<SimulateChangeModalProps> = ({
             <Sparkles className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="font-serif text-2xl font-bold text-[#302F28]">Simulate an Event Change</h2>
-            <p className="text-xs text-[#77756B]">Test how changes ripple through budgets, deadlines & venue capacities.</p>
+            <h2 id="simulate-modal-title" className="font-serif text-2xl font-bold text-[#302F28]">Simulate an Event Change</h2>
+            <p className="text-xs text-[#5A584F]">Test how changes ripple through budgets, deadlines & venue capacities.</p>
           </div>
         </div>
 

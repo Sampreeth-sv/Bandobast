@@ -83,8 +83,29 @@ export const EventWizardModal: React.FC<EventWizardModalProps> = ({
     }
   };
 
+  const [validationError, setValidationError] = useState<string | null>(null);
+
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
+    setValidationError(null);
+
+    // Validation checks for date range and numeric inputs
+    if (!startDate || !endDate) {
+      setValidationError('Both start and end dates are required.');
+      return;
+    }
+    if (new Date(startDate) > new Date(endDate)) {
+      setValidationError('End date cannot be earlier than the start date.');
+      return;
+    }
+    if (guestCount <= 0) {
+      setValidationError('Guest count must be at least 1.');
+      return;
+    }
+    if (budget <= 0) {
+      setValidationError('Total event budget must be greater than zero.');
+      return;
+    }
 
     const selectedConfig = eventTypes.find(t => t.type === eventType)!;
     const initialFunctions: EventFunction[] = selectedConfig.defaultFunctions.map((name, i) => ({
@@ -337,16 +358,20 @@ export const EventWizardModal: React.FC<EventWizardModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/55 backdrop-blur-xs">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/55 backdrop-blur-xs"
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+    >
       <div 
         className="bg-[#FFFDF9] border border-[#E7E0D3] rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl relative animate-in fade-in zoom-in-95 duration-150 max-h-[92vh] overflow-y-auto"
         role="dialog"
         aria-modal="true"
+        aria-labelledby="wizard-modal-title"
       >
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 text-[#77756B] hover:text-[#302F28] p-1.5 rounded-xl hover:bg-[#FAF7F0]"
-          aria-label="Close"
+          className="absolute top-5 right-5 text-[#5A584F] hover:text-[#302F28] p-1.5 rounded-xl hover:bg-[#FAF7F0] focus-visible:ring-2 focus-visible:ring-[#405B43] cursor-pointer"
+          aria-label="Close dialog"
         >
           <X className="w-5 h-5" />
         </button>
@@ -356,10 +381,17 @@ export const EventWizardModal: React.FC<EventWizardModalProps> = ({
             <Sparkles className="w-5 h-5 text-[#E7A83E]" />
           </div>
           <div>
-            <h2 className="font-serif text-2xl font-bold text-[#302F28]">Configure New Celebration</h2>
-            <p className="text-xs text-[#77756B]">Set up a living event twin for weddings, birthdays, reunions, or community galas.</p>
+            <h2 id="wizard-modal-title" className="font-serif text-2xl font-bold text-[#302F28]">Configure New Celebration</h2>
+            <p className="text-xs text-[#5A584F]">Set up a living event twin for weddings, birthdays, reunions, or community galas.</p>
           </div>
         </div>
+
+        {validationError && (
+          <div className="mb-4 p-3 rounded-xl bg-red-50 border border-red-200 text-xs font-semibold text-red-800 flex items-center gap-2">
+            <span>⚠️</span>
+            <span>{validationError}</span>
+          </div>
+        )}
 
         <form onSubmit={handleCreate} className="space-y-5">
           {/* 1. Event Type Selector */}

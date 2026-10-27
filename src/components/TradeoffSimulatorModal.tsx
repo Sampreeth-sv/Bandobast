@@ -50,11 +50,15 @@ export const TradeoffSimulatorModal: React.FC<TradeoffSimulatorModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/55 backdrop-blur-xs">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/55 backdrop-blur-xs"
+      onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}
+    >
       <div 
         className="bg-[#FFFDF9] border border-[#E7E0D3] rounded-3xl max-w-4xl w-full p-6 sm:p-8 shadow-2xl relative animate-in fade-in zoom-in-95 duration-150 max-h-[92vh] flex flex-col"
         role="dialog"
         aria-modal="true"
+        aria-labelledby="tradeoff-modal-title"
       >
         {/* Header */}
         <div className="flex items-start justify-between pb-4 border-b border-[#E7E0D3]">
@@ -63,17 +67,17 @@ export const TradeoffSimulatorModal: React.FC<TradeoffSimulatorModalProps> = ({
               <Sparkles className="w-3.5 h-3.5" />
               <span>Priority Compass & Trade-off Engine</span>
             </div>
-            <h2 className="font-serif text-2xl font-bold text-[#302F28]">
+            <h2 id="tradeoff-modal-title" className="font-serif text-2xl font-bold text-[#302F28]">
               Rebalance Budget: 3 Living Scenarios
             </h2>
-            <p className="text-xs text-[#77756B]">
+            <p className="text-xs text-[#5A584F]">
               Deterministic trade-off proposals adhering to your protected requirements. Choose a strategy to sync the plan.
             </p>
           </div>
           <button
             onClick={onClose}
-            className="text-[#77756B] hover:text-[#302F28] p-1.5 rounded-xl hover:bg-[#FAF7F0]"
-            aria-label="Close"
+            className="text-[#5A584F] hover:text-[#302F28] p-1.5 rounded-xl hover:bg-[#FAF7F0] focus-visible:ring-2 focus-visible:ring-[#405B43] cursor-pointer"
+            aria-label="Close dialog"
           >
             <X className="w-5 h-5" />
           </button>

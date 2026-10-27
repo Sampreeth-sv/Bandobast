@@ -11,6 +11,7 @@ import {
 
 /**
  * Deterministic Financial Arithmetic
+ * Always keeps category planned totals, line item sums, committed, and paid amounts consistent.
  */
 export function calculateBudgetTotals(event: CelebrationEvent) {
   let totalPlanned = 0;
@@ -18,24 +19,26 @@ export function calculateBudgetTotals(event: CelebrationEvent) {
   let totalPaid = 0;
 
   event.categories.forEach(cat => {
-    // Sum line items if present, else fallback to category amount
+    // Sum line items if present, keeping category totals strictly aligned
     if (cat.lineItems && cat.lineItems.length > 0) {
-      cat.lineItems.forEach(item => {
-        totalPlanned += item.plannedAmount;
-        totalCommitted += item.committedAmount;
-        totalPaid += item.paidAmount;
-      });
+      const linePlanned = cat.lineItems.reduce((acc, item) => acc + (Number(item.plannedAmount) || 0), 0);
+      const lineCommitted = cat.lineItems.reduce((acc, item) => acc + (Number(item.committedAmount) || 0), 0);
+      const linePaid = cat.lineItems.reduce((acc, item) => acc + (Number(item.paidAmount) || 0), 0);
+      totalPlanned += linePlanned;
+      totalCommitted += lineCommitted;
+      totalPaid += linePaid;
     } else {
-      totalPlanned += cat.plannedAmount;
-      totalCommitted += cat.committedAmount;
-      totalPaid += cat.paidAmount;
+      totalPlanned += (Number(cat.plannedAmount) || 0);
+      totalCommitted += (Number(cat.committedAmount) || 0);
+      totalPaid += (Number(cat.paidAmount) || 0);
     }
   });
 
   const remainingBudget = event.totalBudget - totalPlanned;
   const isOverBudget = remainingBudget < 0;
   const overrunAmount = isOverBudget ? Math.abs(remainingBudget) : 0;
-  const costPerGuest = event.guestCount > 0 ? Math.round(totalPlanned / event.guestCount) : 0;
+  const guestCount = Math.max(1, event.guestCount || 1);
+  const costPerGuest = Math.round(totalPlanned / guestCount);
 
   return {
     totalBudget: event.totalBudget,
@@ -98,8 +101,18 @@ export function calculateEventReadiness(event: CelebrationEvent): {
 }
 
 /**
+ * Helper to match category semantic types dynamically without hardcoding IDs
+ */
+function isCategoryOfKind(cat: BudgetCategory, keywords: string[]): boolean {
+  const name = (cat.name || '').toLowerCase();
+  const id = (cat.id || '').toLowerCase();
+  return keywords.some(k => name.includes(k) || id.includes(k));
+}
+
+/**
  * Propagate Ripple Changes across the Event Twin
- * Fully deterministic: changes in guest count, dates, or quotes ripple through dependencies
+ * Fully deterministic: changes in guest count, dates, or quotes ripple through real dependencies
+ * Supports weddings, birthdays, engagements, reunions, community gatherings and custom events.
  */
 export function propagateRippleChanges(
   event: CelebrationEvent,
@@ -108,8 +121,8 @@ export function propagateRippleChanges(
   const affectedNodes = new Map<string, RippleNodeDetail>();
   const warningMessages: string[] = [];
 
-  const baseGuestCount = event.guestCount;
-  const newGuestCount = baseGuestCount + simulation.guestCountDelta;
+  const baseGuestCount = Math.max(1, event.guestCount || 1);
+  const newGuestCount = Math.max(1, baseGuestCount + simulation.guestCountDelta);
 
   let extraBudgetCost = 0;
   let affectedTaskCount = 0;
@@ -124,14 +137,14 @@ export function propagateRippleChanges(
     status: guestNodeStatus,
     value: `${newGuestCount} Guests`,
     previousValue: simulation.guestCountDelta !== 0 ? `${baseGuestCount} Guests` : undefined,
-    triggerSource: simulation.guestCountDelta !== 0 ? `Simulated change (+${simulation.guestCountDelta} guests)` : 'Baseline input',
+    triggerSource: simulation.guestCountDelta !== 0 ? `Simulated change (${simulation.guestCountDelta > 0 ? '+' : ''}${simulation.guestCountDelta} guests)` : 'Baseline input',
     whyChanged: simulation.guestCountDelta !== 0 ? `Attendance modified from ${baseGuestCount} to ${newGuestCount}.` : undefined,
     dataSource: 'Organizer Guest Roster',
-    nextAction: simulation.guestCountDelta > 0 ? 'Confirm final RSVP batches with extended family leads' : undefined,
+    nextAction: simulation.guestCountDelta > 0 ? 'Confirm final RSVP batches and seating capacity' : undefined,
     isConfirmed: simulation.guestCountDelta === 0
   });
 
-  // 2. Check Venue Capacities against new headcount
+  // 2. Check Venue Capacities against new headcount dynamically
   let venueCapacityWarning = false;
   let overCapacityCount = 0;
   let venueMaxCapacity = 0;
@@ -140,7 +153,6 @@ export function propagateRippleChanges(
     if (func.venueCapacity > venueMaxCapacity) {
       venueMaxCapacity = func.venueCapacity;
     }
-    // Check if new guest count exceeds this venue's capacity
     if (newGuestCount > func.venueCapacity) {
       venueCapacityWarning = true;
       const overflow = newGuestCount - func.venueCapacity;
@@ -159,7 +171,7 @@ export function propagateRippleChanges(
         whyChanged: `Attendance of ${newGuestCount} exceeds venue max capacity of ${func.venueCapacity} by ${overflow} people.`,
         triggerSource: 'Guest Headcount Node',
         dataSource: 'Venue Rental Contract Specs',
-        nextAction: 'Negotiate adjacent lawn overflow section or prune secondary guest tier.',
+        nextAction: 'Negotiate adjacent overflow section or revise invitation tiers.',
         isConfirmed: false
       });
     } else {
@@ -169,43 +181,64 @@ export function propagateRippleChanges(
         category: 'venue',
         status: 'normal',
         value: `${func.venueName} (Cap: ${func.venueCapacity})`,
-        dataSource: 'Confirmed Contract',
+        dataSource: 'Venue Contract Specification',
         isConfirmed: true
       });
     }
   });
 
-  // 3. Propagate Per-Guest Budget Lines (Catering, Favors)
-  let cateringExtra = 0;
-  let giftsExtra = 0;
+  // 3. Propagate Per-Guest Budget Lines dynamically from actual configured categories
+  const categoryExtraCostMap = new Map<string, number>();
 
   event.categories.forEach(cat => {
-    cat.lineItems?.forEach(item => {
-      if (item.unitType === 'per_guest' && item.unitCost) {
-        const itemExtra = simulation.guestCountDelta * item.unitCost;
-        extraBudgetCost += itemExtra;
+    let catExtra = 0;
 
-        if (cat.id === 'cat-catering') cateringExtra += itemExtra;
-        if (cat.id === 'cat-gifts') giftsExtra += itemExtra;
-      }
-    });
+    if (cat.lineItems && cat.lineItems.length > 0) {
+      cat.lineItems.forEach(item => {
+        if (item.unitType === 'per_guest') {
+          const unitCost = typeof item.unitCost === 'number' && item.unitCost > 0
+            ? item.unitCost
+            : Math.round(item.plannedAmount / baseGuestCount);
+          const itemExtra = simulation.guestCountDelta * unitCost;
+          catExtra += itemExtra;
+        }
+      });
+    } else if (isCategoryOfKind(cat, ['catering', 'food', 'meal', 'feast', 'buffet', 'dinner', 'lunch', 'refreshment', 'gifts', 'favors', 'invitations'])) {
+      // Proportional per-guest estimate when no line items are explicitly populated
+      const unitCost = Math.round(cat.plannedAmount / baseGuestCount);
+      catExtra = simulation.guestCountDelta * unitCost;
+    }
+
+    if (catExtra !== 0) {
+      categoryExtraCostMap.set(cat.id, catExtra);
+      extraBudgetCost += catExtra;
+    }
   });
 
-  // 4. Apply Vendor Quote Spike (Scenario 3: e.g. +20% on Catering or Decor)
+  // 4. Apply Vendor Quote Hike dynamically across categories with supplier quotes or flexible services
   let vendorSpikeAmount = 0;
   if (simulation.vendorIncreasePercent > 0) {
     const factor = simulation.vendorIncreasePercent / 100;
-    // Apply spike to catering and decor
+
+    // Apply to categories matching active vendor quotes or main production categories
+    const categoriesWithQuotes = new Set(event.quotes.map(q => q.vendorCategory.toLowerCase()));
+
     event.categories.forEach(cat => {
-      if (cat.id === 'cat-catering' || cat.id === 'cat-decor') {
-        const increase = cat.plannedAmount * factor;
+      const isTargeted = categoriesWithQuotes.has(cat.name.toLowerCase()) ||
+        isCategoryOfKind(cat, ['catering', 'food', 'decor', 'venue', 'photography', 'production', 'sound']);
+
+      if (isTargeted) {
+        const increase = Math.round(cat.plannedAmount * factor);
         vendorSpikeAmount += increase;
+        const currentExtra = categoryExtraCostMap.get(cat.id) || 0;
+        categoryExtraCostMap.set(cat.id, currentExtra + increase);
       }
     });
+
     extraBudgetCost += vendorSpikeAmount;
 
     warningMessages.push(
-      `⚠️ Vendor Price Hike: Supplier applied a +${simulation.vendorIncreasePercent}% rate adjustment (+₹${vendorSpikeAmount.toLocaleString('en-IN')}).`
+      `⚠️ Vendor Price Hike: Rate adjustment of +${simulation.vendorIncreasePercent}% applies (+₹${vendorSpikeAmount.toLocaleString('en-IN')}).`
     );
 
     affectedNodes.set('node-vendor-quote', {
@@ -213,96 +246,120 @@ export function propagateRippleChanges(
       label: 'Supplier Quotations',
       category: 'vendor',
       status: 'warning',
-      value: `+${simulation.vendorIncreasePercent}% Hike`,
-      whyChanged: `Vendor recalculated raw ingredient and seasonal floral rate (+₹${vendorSpikeAmount.toLocaleString('en-IN')}).`,
+      value: `+${simulation.vendorIncreasePercent}% Rate Hike`,
+      whyChanged: `Vendor recalculation adjusted contracted rates (+₹${vendorSpikeAmount.toLocaleString('en-IN')}).`,
       triggerSource: 'Vendor Revision Notification',
-      dataSource: 'Updated Vendor Quotation Notice',
-      nextAction: 'Counter-negotiate or run Trade-off Simulator to offset cost overrun.',
+      dataSource: 'Quotation Ledger',
+      nextAction: 'Negotiate deliverables or use Trade-off Simulator to balance allocations.',
       isConfirmed: false
     });
   }
 
-  // 5. Build Catering Node
-  const baseCatering = event.categories.find(c => c.id === 'cat-catering')?.plannedAmount || 108000;
-  const newCateringTotal = baseCatering + cateringExtra + (simulation.vendorIncreasePercent > 0 ? baseCatering * (simulation.vendorIncreasePercent / 100) : 0);
-  const isCateringAffected = cateringExtra !== 0 || simulation.vendorIncreasePercent > 0;
+  // 5. Generate Dynamic Category Nodes for Affected Services
+  event.categories.forEach(cat => {
+    const extra = categoryExtraCostMap.get(cat.id) || 0;
+    const baseAmount = cat.plannedAmount;
+    const newTotal = baseAmount + extra;
+    const isAffected = extra !== 0;
 
-  affectedNodes.set('node-catering', {
-    id: 'node-catering',
-    label: 'Catering Budget & Plates',
-    category: 'budget',
-    status: isCateringAffected ? 'warning' : 'normal',
-    value: `₹${newCateringTotal.toLocaleString('en-IN')}`,
-    previousValue: isCateringAffected ? `₹${baseCatering.toLocaleString('en-IN')}` : undefined,
-    whyChanged: isCateringAffected
-      ? `Recalculated from ${newGuestCount} guests × per-person rates + any vendor adjustments (+₹${(cateringExtra + (simulation.vendorIncreasePercent > 0 ? baseCatering * (simulation.vendorIncreasePercent / 100) : 0)).toLocaleString('en-IN')}).`
-      : undefined,
-    triggerSource: simulation.guestCountDelta !== 0 ? 'Guest Headcount Change' : 'Baseline Rates',
-    dataSource: 'Royal Rasoi Quoted Rate Cards',
-    nextAction: isCateringAffected ? 'Lock revised plate guarantee with catering lead' : undefined,
-    isConfirmed: !isCateringAffected
+    // Identify standard or dynamic node key
+    let nodeKey = `node-cat-${cat.id}`;
+    if (isCategoryOfKind(cat, ['catering', 'food', 'feast'])) nodeKey = 'node-catering';
+    else if (isCategoryOfKind(cat, ['gifts', 'favors'])) nodeKey = 'node-gifts';
+
+    affectedNodes.set(nodeKey, {
+      id: nodeKey,
+      label: cat.name,
+      category: 'budget',
+      status: isAffected ? 'warning' : 'normal',
+      value: `₹${newTotal.toLocaleString('en-IN')}`,
+      previousValue: isAffected ? `₹${baseAmount.toLocaleString('en-IN')}` : undefined,
+      whyChanged: isAffected
+        ? `Adjusted for revised headcount/rates (${extra >= 0 ? '+' : ''}₹${extra.toLocaleString('en-IN')}).`
+        : undefined,
+      triggerSource: simulation.guestCountDelta !== 0 ? 'Guest Headcount Shift' : 'Rate Revision',
+      dataSource: 'Configured Budget Category',
+      nextAction: isAffected ? 'Review and lock itemized contract' : undefined,
+      isConfirmed: !isAffected
+    });
   });
 
-  // 6. Build Return Gifts Node
-  const baseGifts = event.categories.find(c => c.id === 'cat-gifts')?.plannedAmount || 16000;
-  const newGiftsTotal = baseGifts + giftsExtra;
-  affectedNodes.set('node-gifts', {
-    id: 'node-gifts',
-    label: 'Return Gift Hampers',
-    category: 'budget',
-    status: giftsExtra !== 0 ? 'affected' : 'normal',
-    value: `₹${newGiftsTotal.toLocaleString('en-IN')} (${newGuestCount} units)`,
-    previousValue: giftsExtra !== 0 ? `₹${baseGifts.toLocaleString('en-IN')}` : undefined,
-    whyChanged: giftsExtra !== 0 ? `Adjusted by ${simulation.guestCountDelta} gift hampers at ₹75/unit.` : undefined,
-    triggerSource: 'Guest Headcount Node',
-    dataSource: 'Illustrative Unit Calculation',
-    nextAction: giftsExtra > 0 ? 'Increase procurement quantity for brass favor boxes' : undefined,
-    isConfirmed: giftsExtra === 0
-  });
-
-  // 7. Date Shift & Task Propagation (Scenario 2)
+  // 6. Dynamic Date Shift & Task Propagation (Scenario 2)
   const isDateShifted = simulation.dateDaysShift !== 0;
   if (isDateShifted) {
     warningMessages.push(
-      `⏱️ Date Compression: Event dates moved earlier by ${Math.abs(simulation.dateDaysShift)} days! Recalculating task lead-times.`
+      `⏱️ Date Compression: Event dates shifted by ${simulation.dateDaysShift} days. Recalculating task lead-times.`
     );
   }
 
-  // Today's date benchmark (using reference time from metadata or current runtime date)
-  const today = new Date('2026-10-25');
+  // Dynamic reference today date (midnight local time)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Identify tasks affected by headcount, venue capacity, date shifts, or task dependencies
+  const affectedTaskIds = new Set<string>();
 
   event.tasks.forEach(task => {
     let taskAffected = false;
     let reason = '';
     let status = task.status;
 
+    const taskText = `${task.name} ${task.description || ''} ${task.category || ''}`.toLowerCase();
+    const isHeadcountDependent = taskText.includes('guest') ||
+      taskText.includes('rsvp') ||
+      taskText.includes('catering') ||
+      taskText.includes('food') ||
+      taskText.includes('headcount') ||
+      taskText.includes('invitation') ||
+      taskText.includes('plate') ||
+      taskText.includes('gift') ||
+      taskText.includes('favor');
+
+    const isVenueDependent = taskText.includes('venue') ||
+      taskText.includes('lawn') ||
+      taskText.includes('hall') ||
+      taskText.includes('capacity') ||
+      taskText.includes('layout');
+
     // Headcount-dependent tasks
-    if (simulation.guestCountDelta !== 0) {
-      if (task.id === 'task-1' || task.id === 'task-2' || task.id === 'task-4') {
-        taskAffected = true;
-        reason = `Headcount increased to ${newGuestCount}. Requires immediate verification.`;
-      }
-      if (venueCapacityWarning && task.id === 'task-3') {
-        taskAffected = true;
-        status = 'blocked';
-        reason = 'BLOCKED: Attendance exceeds venue capacity of 200.';
-      }
+    if (simulation.guestCountDelta !== 0 && isHeadcountDependent) {
+      taskAffected = true;
+      reason = `Headcount shifted to ${newGuestCount} guests. Requires allocation check.`;
+      affectedTaskIds.add(task.id);
+    }
+
+    // Venue capacity conflict
+    if (venueCapacityWarning && isVenueDependent) {
+      taskAffected = true;
+      status = 'blocked';
+      reason = `BLOCKED: Attendance of ${newGuestCount} exceeds venue capacity (${venueMaxCapacity}).`;
+      affectedTaskIds.add(task.id);
     }
 
     // Date-shift dependent tasks
     let revisedDueDate = task.dueDate;
     if (isDateShifted) {
       const origDate = new Date(task.originalDueDate || task.dueDate);
-      origDate.setDate(origDate.getDate() + simulation.dateDaysShift);
-      revisedDueDate = origDate.toISOString().split('T')[0];
-      taskAffected = true;
-      reason += (reason ? ' | ' : '') + `Due date moved earlier by ${Math.abs(simulation.dateDaysShift)} days (from ${task.originalDueDate} to ${revisedDueDate}).`;
+      if (!isNaN(origDate.getTime())) {
+        origDate.setDate(origDate.getDate() + simulation.dateDaysShift);
+        revisedDueDate = origDate.toISOString().split('T')[0];
+        taskAffected = true;
+        reason += (reason ? ' | ' : '') + `Due date moved by ${simulation.dateDaysShift} days (from ${task.originalDueDate || task.dueDate} to ${revisedDueDate}).`;
+        affectedTaskIds.add(task.id);
 
-      // Check if newly overdue relative to today
-      if (new Date(revisedDueDate) < today && status !== 'completed') {
-        status = 'overdue';
-        overdueTaskCount++;
+        // Check if newly overdue relative to today
+        if (new Date(revisedDueDate) < today && status !== 'completed') {
+          status = 'overdue';
+          overdueTaskCount++;
+        }
       }
+    }
+
+    // Dependency propagation: if dependencies were affected
+    if (!taskAffected && task.dependencies && task.dependencies.some(depId => affectedTaskIds.has(depId))) {
+      taskAffected = true;
+      reason = 'Pre-requisite task dependencies were modified.';
+      affectedTaskIds.add(task.id);
     }
 
     if (taskAffected) {
@@ -313,11 +370,11 @@ export function propagateRippleChanges(
         category: 'timeline',
         status: status === 'overdue' ? 'critical' : status === 'blocked' ? 'warning' : 'affected',
         value: `Due: ${revisedDueDate}`,
-        previousValue: `Due: ${task.originalDueDate}`,
+        previousValue: `Due: ${task.originalDueDate || task.dueDate}`,
         whyChanged: reason,
-        triggerSource: isDateShifted ? 'Event Date Shift' : 'Guest Headcount Shift',
-        dataSource: 'Timeline Dependency Engine',
-        nextAction: status === 'overdue' ? 'Escalate to family coordinator immediately' : 'Confirm new deadline',
+        triggerSource: isDateShifted ? 'Event Date Shift' : 'Headcount / Dependency Shift',
+        dataSource: 'Timeline Dependency Graph',
+        nextAction: status === 'overdue' ? 'Escalate immediately to family coordinator' : 'Confirm revised deadline',
         isConfirmed: false
       });
     } else {
@@ -333,7 +390,7 @@ export function propagateRippleChanges(
     }
   });
 
-  // 8. Overall Budget Node
+  // 7. Overall Budget Node
   const baseBudgetTotals = calculateBudgetTotals(event);
   const revisedTotalCost = baseBudgetTotals.totalPlanned + extraBudgetCost;
   const isOverBudget = revisedTotalCost > event.totalBudget;
@@ -356,7 +413,7 @@ export function propagateRippleChanges(
       ? `Net impact of simulated adjustments: +₹${extraBudgetCost.toLocaleString('en-IN')}. ${isOverBudget ? `Exceeds budget by ₹${overrunAmount.toLocaleString('en-IN')}.` : 'Within reserve capacity.'}`
       : undefined,
     triggerSource: 'Aggregated Dependency Graph',
-    dataSource: 'Deterministic Budget Calculation Engine',
+    dataSource: 'Deterministic Calculation Engine',
     nextAction: isOverBudget ? 'Launch Priority Compass Trade-off Simulator' : 'Approve updated allocation',
     isConfirmed: !isOverBudget && extraBudgetCost === 0
   });
@@ -378,206 +435,191 @@ export function propagateRippleChanges(
 
 /**
  * Generate 3 Genuinely Distinct Deterministic Trade-off Scenarios
- * Respecting User's Priority Compass & Protected Requirements
+ * Respects User's Priority Compass & Protected Requirements.
+ * Works dynamically across Weddings, Birthdays, Engagements, Reunions, Community, and Custom Events.
+ * Never reduces protected categories or items, never produces negative allocations,
+ * and computes real savings from actual event data.
  */
 export function calculateTradeoffScenarios(
   event: CelebrationEvent,
-  overrunAmount: number
+  overrunAmount?: number
 ): Scenario[] {
-  // Ensure we have a sensible target savings to balance (minimum 25000)
-  const targetSavings = overrunAmount > 0 ? overrunAmount : 26000;
   const baseTotals = calculateBudgetTotals(event);
+  const newGuestCount = event.guestCount + (event.activeSimulation?.guestCountDelta || 0);
 
-  // SCENARIO 1: Protect the Food
-  // Priority #1 Food is locked. Decor & Photography absorb reductions.
-  const decorReduction1 = Math.round(targetSavings * 0.55); // 55% from Decor
-  const photoReduction1 = Math.round(targetSavings * 0.30); // 30% from Photography
-  const giftReduction1 = Math.round(targetSavings * 0.15);  // 15% from Gifts/Favors
+  // Compute dynamic target savings from the simulated overrun or explicit parameter
+  let targetSavings = 26000;
+  if (typeof overrunAmount === 'number' && overrunAmount > 0) {
+    targetSavings = overrunAmount;
+  } else if (event.activeSimulation && (event.activeSimulation.guestCountDelta !== 0 || event.activeSimulation.vendorIncreasePercent !== 0)) {
+    const simResult = propagateRippleChanges(event, event.activeSimulation);
+    if (simResult.overrunAmount > 0) targetSavings = simResult.overrunAmount;
+  } else if (baseTotals.overrunAmount > 0) {
+    targetSavings = baseTotals.overrunAmount;
+  }
 
-  const decorCat = event.categories.find(c => c.id === 'cat-decor');
-  const photoCat = event.categories.find(c => c.id === 'cat-photo');
-  const giftCat = event.categories.find(c => c.id === 'cat-gifts');
+  // Identify protected categories (marked isMustPreserve or listed in event.protectedRequirements)
+  const isProtectedCategory = (cat: BudgetCategory) => {
+    if (cat.isMustPreserve) return true;
+    const name = cat.name.toLowerCase();
+    return event.protectedRequirements?.some(p => p.toLowerCase().includes(name));
+  };
 
-  const changes1: ScenarioChange[] = [
-    {
-      categoryId: 'cat-decor',
-      categoryName: 'Decoration & Floral Art',
-      originalAmount: decorCat?.plannedAmount || 48000,
-      revisedAmount: (decorCat?.plannedAmount || 48000) - decorReduction1,
-      delta: -decorReduction1,
-      rationale: 'Replace exotic imported floral accents with seasonal local marigold and jasmine garlands.'
-    },
-    {
-      categoryId: 'cat-photo',
-      categoryName: 'Photography & Cinema',
-      originalAmount: photoCat?.plannedAmount || 38000,
-      revisedAmount: (photoCat?.plannedAmount || 38000) - photoReduction1,
-      delta: -photoReduction1,
-      rationale: 'Retain all 3-day candid coverage, but substitute drone operator package with traditional crane.'
-    },
-    {
-      categoryId: 'cat-gifts',
-      categoryName: 'Invitations & Return Gifts',
-      originalAmount: giftCat?.plannedAmount || 16000,
-      revisedAmount: (giftCat?.plannedAmount || 16000) - giftReduction1,
-      delta: -giftReduction1,
-      rationale: 'Standardize return gift boxes to artisanal regional sweets, eliminating custom brass packaging.'
-    }
-  ];
+  // Classify categories dynamically
+  const foodCats = event.categories.filter(c => !isProtectedCategory(c) && isCategoryOfKind(c, ['catering', 'food', 'meal', 'feast', 'buffet', 'dinner', 'cake', 'refreshment']));
+  const decorCats = event.categories.filter(c => !isProtectedCategory(c) && isCategoryOfKind(c, ['decor', 'floral', 'flower', 'mandap', 'stage', 'lighting', 'balloon', 'ambience']));
+  const photoCats = event.categories.filter(c => !isProtectedCategory(c) && isCategoryOfKind(c, ['photo', 'video', 'cinema', 'studio', 'media', 'camera']));
+  const giftCats = event.categories.filter(c => !isProtectedCategory(c) && isCategoryOfKind(c, ['gift', 'favor', 'invite', 'invitation', 'merch', 'souvenir']));
+  const contingencyCats = event.categories.filter(c => !isProtectedCategory(c) && isCategoryOfKind(c, ['contingency', 'reserve', 'buffer', 'emergency']));
+  const otherFlexibleCats = event.categories.filter(c => 
+    !isProtectedCategory(c) &&
+    !foodCats.includes(c) &&
+    !decorCats.includes(c) &&
+    !photoCats.includes(c) &&
+    !giftCats.includes(c) &&
+    !contingencyCats.includes(c)
+  );
 
-  const totalSavings1 = decorReduction1 + photoReduction1 + giftReduction1;
-  const revisedTotal1 = baseTotals.totalPlanned - totalSavings1;
+  // Fallback category pool if specific types are absent
+  const generalPool = [...decorCats, ...otherFlexibleCats, ...giftCats, ...photoCats].filter(c => c.plannedAmount > 0);
 
+  // Helper to safely apply reductions up to available planned amount without negative values
+  const applySafeReductions = (allocations: { cat: BudgetCategory; weight: number; rationale: string }[]) => {
+    const changes: ScenarioChange[] = [];
+    let accumulatedSavings = 0;
+
+    allocations.forEach(({ cat, weight, rationale }) => {
+      if (cat.plannedAmount <= 0) return;
+      const desiredReduction = Math.round(targetSavings * weight);
+      const safeReduction = Math.min(cat.plannedAmount, Math.max(0, desiredReduction));
+
+      if (safeReduction > 0) {
+        changes.push({
+          categoryId: cat.id,
+          categoryName: cat.name,
+          originalAmount: cat.plannedAmount,
+          revisedAmount: cat.plannedAmount - safeReduction,
+          delta: -safeReduction,
+          rationale
+        });
+        accumulatedSavings += safeReduction;
+      }
+    });
+
+    return { changes, accumulatedSavings };
+  };
+
+  // --- SCENARIO 1: Protect the Feast / Dining Experience ---
+  // Food & Catering is 100% protected. Offsets distributed across Decor, Gifts, and Media.
+  const primaryDecor = decorCats[0] || generalPool[0] || event.categories[0];
+  const primaryPhoto = photoCats[0] || generalPool[1] || event.categories[1] || primaryDecor;
+  const primaryGifts = giftCats[0] || generalPool[2] || event.categories[2] || primaryDecor;
+
+  const { changes: changes1, accumulatedSavings: savings1 } = applySafeReductions([
+    { cat: primaryDecor, weight: 0.55, rationale: 'Use regional in-season floral varieties and optimize stage lighting fixtures.' },
+    { cat: primaryPhoto, weight: 0.30, rationale: 'Retain all essential ceremony coverage; streamline drone add-ons or physical album duplicates.' },
+    { cat: primaryGifts, weight: 0.15, rationale: 'Standardize packaging or opt for handcrafted regional favor sets.' }
+  ]);
+
+  const revisedTotal1 = baseTotals.totalPlanned - savings1;
   const scenario1: Scenario = {
     id: 'scen-protect-food',
     key: 'protect_food',
     title: 'Protect the Feast',
-    subtitle: 'Zero Compromise on Dining & Rituals',
-    description: 'Keeps Royal Rasoi live chaat counters, regional delicacies, and dessert bars completely untouched. Offsets cost by optimizing decorative floral stages and video add-ons.',
+    subtitle: 'Zero Compromise on Dining & Culinary Hospitality',
+    description: 'Keeps main culinary courses, live counters, and banquet hospitality completely protected. Offsets costs by optimizing decorative production and photo packaging.',
     changes: changes1,
     originalTotal: baseTotals.totalPlanned,
     revisedTotal: revisedTotal1,
     variance: revisedTotal1 - event.totalBudget,
-    savings: totalSavings1,
+    savings: savings1,
     protectedItems: [
-      'Royal Rasoi Caterers live stations & 4-course banquet',
-      'Vedic Mandap morning sacred ceremony rituals',
-      'Guest welcome drinks & high-tea hospitality'
+      'Core catering menus, live food stations, and guest beverage hospitality',
+      'Primary ceremonial rituals and key occasion traditions',
+      'Guest welcome drinks and hospitality staff'
     ],
     compromises: [
-      'Floral mandap uses 100% seasonal Indian marigolds instead of imported orchids',
-      'Drone cinematic coverage removed in favor of high-res candid cameras',
-      'Simplified packaging for return favor boxes'
+      'Decor uses local seasonal flowers and streamlined stage canopies',
+      'Photography package prioritizes candid high-res deliverables over luxury duplicate albums',
+      'Packaging for return favors optimized'
     ],
     assumptions: [
-      'Local flower vendors can supply sufficient marigold volume',
-      'Catering plate count remains at guaranteed tier'
+      'Local flower vendors supply required seasonal volume',
+      'Guest count guarantees remain at confirmed tier'
     ]
   };
 
-  // SCENARIO 2: Protect the Guest List
-  // Guest count cannot be cut. Rebalances Photography, Decor, and utilizes Contingency Reserve.
-  const decorReduction2 = Math.round(targetSavings * 0.40);
-  const photoReduction2 = Math.round(targetSavings * 0.35);
-  const contingencyBuffer2 = Math.round(targetSavings * 0.25);
+  // --- SCENARIO 2: Protect the Guest List & Attendance ---
+  // Headcount cannot be cut. Rebalances Decor, Media, and Contingency Reserve.
+  const primaryContingency = contingencyCats[0] || generalPool[3] || primaryDecor;
 
-  const changes2: ScenarioChange[] = [
-    {
-      categoryId: 'cat-decor',
-      categoryName: 'Decoration & Floral Art',
-      originalAmount: decorCat?.plannedAmount || 48000,
-      revisedAmount: (decorCat?.plannedAmount || 48000) - decorReduction2,
-      delta: -decorReduction2,
-      rationale: 'Consolidate mehendi & sangeet lighting rentals into a bundled multi-day package.'
-    },
-    {
-      categoryId: 'cat-photo',
-      categoryName: 'Photography & Cinema',
-      originalAmount: photoCat?.plannedAmount || 38000,
-      revisedAmount: (photoCat?.plannedAmount || 38000) - photoReduction2,
-      delta: -photoReduction2,
-      rationale: 'Switch from 2 printed luxury physical leather albums to full 4K digital cloud gallery + 1 parent album.'
-    },
-    {
-      categoryId: 'cat-contingency',
-      categoryName: 'Contingency & Reserve',
-      originalAmount: event.categories.find(c => c.id === 'cat-contingency')?.plannedAmount || 25000,
-      revisedAmount: (event.categories.find(c => c.id === 'cat-contingency')?.plannedAmount || 25000) - contingencyBuffer2,
-      delta: -contingencyBuffer2,
-      rationale: 'Reallocate a portion of general emergency contingency reserve to cover the higher headcount.'
-    }
-  ];
+  const { changes: changes2, accumulatedSavings: savings2 } = applySafeReductions([
+    { cat: primaryDecor, weight: 0.45, rationale: 'Consolidate multiple function lighting rentals into a bundled contract.' },
+    { cat: primaryPhoto, weight: 0.30, rationale: 'Deliver luxury digital cloud gallery + 1 parent heirloom album instead of multiple printed sets.' },
+    { cat: primaryContingency, weight: 0.25, rationale: 'Reallocate a calculated portion of contingency reserve to absorb headcount delta.' }
+  ]);
 
-  const totalSavings2 = decorReduction2 + photoReduction2 + contingencyBuffer2;
-  const revisedTotal2 = baseTotals.totalPlanned - totalSavings2;
-
+  const revisedTotal2 = baseTotals.totalPlanned - savings2;
   const scenario2: Scenario = {
     id: 'scen-protect-guests',
     key: 'protect_guests',
     title: 'Protect the Guest List',
-    subtitle: 'Welcome Everyone Without Cutting Invites',
-    description: 'Accommodates the full 220-guest turnout. Offsets additional plate costs by switching to digital photo galleries, multi-day decor bundles, and mobilizing contingency reserves.',
+    subtitle: 'Accommodate All Guests Without Pruning Invitations',
+    description: 'Accommodates the full turnout without reducing the guest list. Balances additional costs by switching to digital galleries, multi-day equipment bundles, and reserve mobilization.',
     changes: changes2,
     originalTotal: baseTotals.totalPlanned,
     revisedTotal: revisedTotal2,
     variance: revisedTotal2 - event.totalBudget,
-    savings: totalSavings2,
+    savings: savings2,
     protectedItems: [
-      'Full extended family guest list (220 guests)',
-      'Per-guest gift hampers & welcome sweets',
-      'Live musical sangeet entertainment'
+      `Full guest turnout and extended invitations (${newGuestCount} guests)`,
+      'Individual guest favor hampers and seating hospitality',
+      'Key evening music & celebration entertainment'
     ],
     compromises: [
-      'Physical printed album count reduced from 2 to 1 (cloud gallery provided)',
-      'Contingency buffer reduced to ₹18,500',
-      'Requires venue lawn layout reconfiguration for extra tables'
+      'Printed album count adjusted with full 4K cloud gallery included',
+      'Contingency reserve reduced to cover guest surge',
+      'Venue layout reconfigured for extra table density'
     ],
     assumptions: [
-      'Resort manager approves lawn spillover layout without extra surcharge'
+      'Venue manager permits layout adjustments without additional surcharge'
     ]
   };
 
-  // SCENARIO 3: Protect the Memories
-  // Keeps Photography & Cinematic 4K Teaser 100% protected. Trims Decor, Gifts, and trims secondary catering courses.
-  const decorReduction3 = Math.round(targetSavings * 0.45);
-  const giftReduction3 = Math.round(targetSavings * 0.30);
-  const cateringCourseReduction3 = Math.round(targetSavings * 0.25);
-  const cateringCat = event.categories.find(c => c.id === 'cat-catering');
-  const baseCatering = cateringCat?.plannedAmount || 108000;
+  // --- SCENARIO 3: Protect the Memories & Audio-Visual ---
+  // Keeps Photography & Cinematic Documentation 100% protected. Trims Decor, Invites, and trims secondary dining redundancy.
+  const primaryFood = foodCats[0] || generalPool[0] || event.categories[0];
 
-  const changes3: ScenarioChange[] = [
-    {
-      categoryId: 'cat-decor',
-      categoryName: 'Decoration & Floral Art',
-      originalAmount: decorCat?.plannedAmount || 48000,
-      revisedAmount: (decorCat?.plannedAmount || 48000) - decorReduction3,
-      delta: -decorReduction3,
-      rationale: 'Re-use morning mandap florals for evening reception stage backdrop with strategic uplighting.'
-    },
-    {
-      categoryId: 'cat-gifts',
-      categoryName: 'Invitations & Return Gifts',
-      originalAmount: giftCat?.plannedAmount || 16000,
-      revisedAmount: (giftCat?.plannedAmount || 16000) - giftReduction3,
-      delta: -giftReduction3,
-      rationale: 'Transition 100% of invites to bespoke animated interactive video invitations.'
-    },
-    {
-      categoryId: 'cat-catering',
-      categoryName: 'Catering & Beverages',
-      originalAmount: baseCatering,
-      revisedAmount: baseCatering - cateringCourseReduction3,
-      delta: -cateringCourseReduction3,
-      rationale: 'Trim dessert spread from 6 items to 4 signature desserts (retaining live Jalebi-Rabdi).'
-    }
-  ];
+  const { changes: changes3, accumulatedSavings: savings3 } = applySafeReductions([
+    { cat: primaryDecor, weight: 0.45, rationale: 'Repurpose morning ceremonial florals for evening stage backdrops.' },
+    { cat: primaryGifts, weight: 0.30, rationale: 'Transition 100% of invitations to bespoke digital animated video invitations.' },
+    { cat: primaryFood, weight: 0.25, rationale: 'Trim secondary dessert redundancies while preserving signature main dishes.' }
+  ]);
 
-  const totalSavings3 = decorReduction3 + giftReduction3 + cateringCourseReduction3;
-  const revisedTotal3 = baseTotals.totalPlanned - totalSavings3;
-
+  const revisedTotal3 = baseTotals.totalPlanned - savings3;
   const scenario3: Scenario = {
     id: 'scen-protect-memories',
     key: 'protect_memories',
     title: 'Protect the Memories',
-    subtitle: 'Preserve Cinematic Film, Drone & Heirlooms',
-    description: 'Guarantees the complete 4K cinematic film, drone shots, and heirloom albums. Saves costs by floral re-purposing between morning and evening, digital invites, and trimming dessert redundancy.',
+    subtitle: 'Preserve Cinematic Documentation & Photo Coverage',
+    description: 'Guarantees complete high-definition filming, candid photographers, and heirloom documentation. Saves costs through floral repurposing, digital invitations, and trimming dessert course redundancies.',
     changes: changes3,
     originalTotal: baseTotals.totalPlanned,
     revisedTotal: revisedTotal3,
     variance: revisedTotal3 - event.totalBudget,
-    savings: totalSavings3,
+    savings: savings3,
     protectedItems: [
-      'ShutterMagic 4K Cinematic teaser film & aerial drone operators',
-      'Deluxe 40-page flush-mount wedding album',
-      'All candid photographer hours across 4 functions'
+      'Complete cinematic highlight films and senior photographer hours',
+      'Deluxe heirloom photo album documentation',
+      'All candid capture across all scheduled functions'
     ],
     compromises: [
-      'Florals from morning mandap relocated for reception backdrop',
-      'Paper invitation printing eliminated in favor of luxury digital invite',
-      'Dessert menu trimmed from 6 varieties to 4 signature counters'
+      'Florals repurposed between daytime and evening functions with uplighting',
+      'Physical paper printing eliminated in favor of animated digital video invites',
+      'Dessert menu trimmed to signature favorites'
     ],
     assumptions: [
-      'Decor crew has 3-hour turnaround window between morning pheras and evening gala'
+      'Venue turnaround window allows stage decor reconfiguration between functions'
     ]
   };
 
@@ -586,7 +628,7 @@ export function calculateTradeoffScenarios(
 
 /**
  * Apply Scenario to Living Event Plan
- * Updates shared state, modifies category amounts, and stamps provenance
+ * Updates shared state, modifies category amounts, and stamps unverified provenance.
  */
 export function applyScenarioToEvent(
   event: CelebrationEvent,
@@ -600,17 +642,29 @@ export function applyScenarioToEvent(
     let updatedLineItems = cat.lineItems;
     if (cat.lineItems && cat.lineItems.length > 0 && cat.plannedAmount > 0) {
       const ratio = change.revisedAmount / cat.plannedAmount;
-      updatedLineItems = cat.lineItems.map(item => ({
-        ...item,
-        plannedAmount: Math.round(item.plannedAmount * ratio),
-        provenance: {
-          ...item.provenance,
-          source: 'user_entered',
-          verified: true,
-          notes: `Applied Scenario: ${scenario.title} (${change.delta >= 0 ? '+' : ''}${change.delta})`,
-          lastUpdated: new Date().toISOString().split('T')[0]
-        }
-      }));
+      updatedLineItems = cat.lineItems.map(item => {
+        // Respect item-level protection
+        if (item.isProtected) return item;
+        const revisedLine = Math.round(item.plannedAmount * ratio);
+        return {
+          ...item,
+          plannedAmount: revisedLine,
+          provenance: {
+            ...item.provenance,
+            source: 'user_entered',
+            verified: false, // Section 1 & 3: AI/Scenario estimates are unverified until confirmed
+            notes: `Applied Scenario: ${scenario.title} (${change.delta >= 0 ? '+' : ''}${change.delta})`,
+            lastUpdated: new Date().toISOString().split('T')[0]
+          }
+        };
+      });
+
+      // Adjust rounding discrepancy so line item sum matches category plannedAmount exactly
+      const lineSum = updatedLineItems.reduce((acc, item) => acc + item.plannedAmount, 0);
+      const diff = change.revisedAmount - lineSum;
+      if (diff !== 0 && updatedLineItems.length > 0) {
+        updatedLineItems[0].plannedAmount += diff;
+      }
     }
 
     return {
@@ -621,7 +675,6 @@ export function applyScenarioToEvent(
     };
   });
 
-  // Recompute readiness
   const updatedEvent: CelebrationEvent = {
     ...event,
     categories: updatedCategories,
@@ -642,38 +695,97 @@ export function applyScenarioToEvent(
 }
 
 /**
+ * Helper to escape text for RFC 5545 iCalendar compliance
+ */
+function escapeIcsText(str: string): string {
+  if (!str) return '';
+  return str
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\r?\n/g, '\\n');
+}
+
+/**
  * Generate standard downloadable iCalendar (.ics) format
+ * Respects configured event times, escapes text according to RFC 5545,
+ * and includes valid calendar fields.
  */
 export function exportIcsCalendar(event: CelebrationEvent): string {
   const pad = (n: number) => (n < 10 ? `0${n}` : `${n}`);
-  const formatDateToIcs = (dateStr: string, timeStr = '10:00 AM') => {
+
+  // Helper to parse time string like "10:00 AM - 2:00 PM" or "6:30 PM"
+  const parseTimeSpan = (dateStr: string, timeStr?: string): { startIso: string; endIso: string } => {
     const d = new Date(dateStr);
     const y = d.getFullYear();
     const m = pad(d.getMonth() + 1);
     const day = pad(d.getDate());
-    return `${y}${m}${day}T090000Z`;
+
+    let startHour = 10;
+    let startMin = 0;
+    let endHour = 13;
+    let endMin = 0;
+
+    if (timeStr) {
+      const parts = timeStr.split('-').map(s => s.trim());
+      const parseSingleTime = (t: string) => {
+        const match = t.match(/(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?/i);
+        if (match) {
+          let h = parseInt(match[1], 10);
+          const min = match[2] ? parseInt(match[2], 10) : 0;
+          const meridian = match[3]?.toUpperCase();
+          if (meridian === 'PM' && h < 12) h += 12;
+          if (meridian === 'AM' && h === 12) h = 0;
+          return { h, min };
+        }
+        return null;
+      };
+
+      const startParsed = parseSingleTime(parts[0]);
+      if (startParsed) {
+        startHour = startParsed.h;
+        startMin = startParsed.min;
+      }
+
+      if (parts[1]) {
+        const endParsed = parseSingleTime(parts[1]);
+        if (endParsed) {
+          endHour = endParsed.h;
+          endMin = endParsed.min;
+        }
+      } else {
+        endHour = (startHour + 3) % 24;
+      }
+    }
+
+    const startIso = `${y}${m}${day}T${pad(startHour)}${pad(startMin)}00Z`;
+    const endIso = `${y}${m}${day}T${pad(endHour)}${pad(endMin)}00Z`;
+    return { startIso, endIso };
   };
 
-  let icsLines = [
+  const stampNow = `${new Date().toISOString().replace(/[-:]/g, '').split('.')[0]}Z`;
+
+  const icsLines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
     'PRODID:-//Bandobast//Intelligent Event Operations Platform//EN',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
-    `X-WR-CALNAME:${event.name}`
+    `X-WR-CALNAME:${escapeIcsText(event.name)}`
   ];
 
   // Add event functions
-  event.functions.forEach((func, idx) => {
-    const start = formatDateToIcs(func.date, func.time);
+  event.functions.forEach(func => {
+    const { startIso, endIso } = parseTimeSpan(func.date, func.time);
     icsLines.push(
       'BEGIN:VEVENT',
       `UID:func-${func.id}@bandobast.app`,
-      `DTSTAMP:${formatDateToIcs(new Date().toISOString().split('T')[0])}`,
-      `DTSTART:${start}`,
-      `SUMMARY:${event.name} - ${func.name}`,
-      `LOCATION:${func.venueName}`,
-      `DESCRIPTION:${func.description} | Expected Guests: ${func.guestCount} | Attire: ${func.attireTheme || 'Festive'}`,
+      `DTSTAMP:${stampNow}`,
+      `DTSTART:${startIso}`,
+      `DTEND:${endIso}`,
+      `SUMMARY:${escapeIcsText(`${event.name} - ${func.name}`)}`,
+      `LOCATION:${escapeIcsText(func.venueName)}`,
+      `DESCRIPTION:${escapeIcsText(`${func.description} | Expected Guests: ${func.guestCount} | Attire: ${func.attireTheme || 'Festive'}`)}`,
       'STATUS:CONFIRMED',
       'END:VEVENT'
     );
@@ -681,14 +793,15 @@ export function exportIcsCalendar(event: CelebrationEvent): string {
 
   // Add critical tasks
   event.tasks.forEach(task => {
-    const due = formatDateToIcs(task.dueDate);
+    const { startIso, endIso } = parseTimeSpan(task.dueDate, '9:00 AM');
     icsLines.push(
       'BEGIN:VEVENT',
       `UID:task-${task.id}@bandobast.app`,
-      `DTSTAMP:${formatDateToIcs(new Date().toISOString().split('T')[0])}`,
-      `DTSTART:${due}`,
-      `SUMMARY:Deadline: ${task.name}`,
-      `DESCRIPTION:${task.description} | Assigned: ${task.assignedTo || 'Unassigned'} | Priority: ${task.priority.toUpperCase()}`,
+      `DTSTAMP:${stampNow}`,
+      `DTSTART:${startIso}`,
+      `DTEND:${endIso}`,
+      `SUMMARY:${escapeIcsText(`Deadline: ${task.name}`)}`,
+      `DESCRIPTION:${escapeIcsText(`${task.description} | Assigned: ${task.assignedTo || 'Unassigned'} | Priority: ${task.priority.toUpperCase()}`)}`,
       task.status === 'completed' ? 'STATUS:COMPLETED' : 'STATUS:CONFIRMED',
       'END:VEVENT'
     );
@@ -702,7 +815,7 @@ export function exportIcsCalendar(event: CelebrationEvent): string {
  * Generate Vendor & Catering Operations Brief
  */
 export function exportCateringBrief(event: CelebrationEvent): string {
-  const catering = event.categories.find(c => c.id === 'cat-catering');
+  const catering = event.categories.find(c => isCategoryOfKind(c, ['catering', 'food', 'meal']));
   const totals = calculateBudgetTotals(event);
 
   return `=====================================================
@@ -728,12 +841,12 @@ ${i + 1}. ${f.name}
 
 ESSENTIAL DIETARY & OPERATIONAL CONSTRAINTS:
 -----------------------------------------------------
-* Separate Satvik & Jain counter for morning wedding ceremony
-* Uniformed waitstaff: Minimum ratio of 1 server per 15 guests
-* High-temp chafing dishes and clean copper serviceware
-* Live stations to be fully operational 30 minutes prior to guest arrival
+* Dietary segregation for vegetarian, Jain, and special diets
+* Uniformed waitstaff with verified service standards
+* High-temp chafing dishes and sanitized copper serviceware
+* Live stations operational 30 minutes prior to scheduled start
 
-Generated automatically via Bandobast Intelligent Event Twin.
+Generated automatically via Bandobast Intelligent Event Operations Platform.
 Date: ${new Date().toLocaleDateString('en-IN', { dateStyle: 'full' })}
 =====================================================`;
 }

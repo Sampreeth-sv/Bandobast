@@ -66,6 +66,9 @@ export const AiChatView: React.FC<AiChatViewProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [activeSession?.messages, isSending]);
 
+  // In-memory cache for vendor recommendations to avoid duplicate API requests (Section 9)
+  const recCacheRef = useRef<Map<string, VendorRecommendation[]>>(new Map());
+
   const handleSendMessage = async (textToSend?: string) => {
     const text = textToSend || inputText;
     if (!text.trim() || isSending || !activeSession) return;
@@ -94,16 +97,24 @@ export const AiChatView: React.FC<AiChatViewProps> = ({
           /photo|cinema|camera|video/i.test(text) ? 'photography' :
           /decor|floral|flower|mandap/i.test(text) ? 'decor' : 'all';
 
-        const recRes = await fetchBudgetVendorRecommendations({
-          budget: currentBudget,
-          location: currentEvent.location,
-          guestCount: currentEvent.guestCount,
-          category: catFilter,
-          occasion: currentEvent.occasion
-        });
+        const cacheKey = `${catFilter}-${Math.round(currentBudget / 25000) * 25000}`;
+        const cached = recCacheRef.current.get(cacheKey);
 
-        if (recRes.success && recRes.recommendations) {
-          suggestedVendors = recRes.recommendations.slice(0, 3);
+        if (cached && cached.length > 0) {
+          suggestedVendors = cached.slice(0, 3);
+        } else {
+          const recRes = await fetchBudgetVendorRecommendations({
+            budget: currentBudget,
+            location: currentEvent.location,
+            guestCount: currentEvent.guestCount,
+            category: catFilter,
+            occasion: currentEvent.occasion
+          });
+
+          if (recRes.success && recRes.recommendations) {
+            recCacheRef.current.set(cacheKey, recRes.recommendations);
+            suggestedVendors = recRes.recommendations.slice(0, 3);
+          }
         }
       }
 
@@ -344,8 +355,8 @@ export const AiChatView: React.FC<AiChatViewProps> = ({
                               <div>
                                 <div className="flex items-center justify-between text-[10px] mb-1">
                                   <span className="font-bold text-[#405B43] uppercase">{v.category}</span>
-                                  <span className="text-[#E7A83E] font-bold flex items-center gap-0.5">
-                                    <Star className="w-3 h-3 fill-[#E7A83E]" /> {v.rating}
+                                  <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold bg-amber-50 text-amber-900 border border-amber-200">
+                                    Illustrative Demo
                                   </span>
                                 </div>
                                 <h4 className="font-serif font-bold text-xs text-[#302F28]">{v.name}</h4>

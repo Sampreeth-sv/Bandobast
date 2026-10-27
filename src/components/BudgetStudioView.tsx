@@ -61,9 +61,29 @@ export const BudgetStudioView: React.FC<BudgetStudioViewProps> = ({
 
   const handleSaveCategoryBudget = (categoryId: string, newAmount: number) => {
     if (newAmount < 0) return;
-    const updatedCategories = event.categories.map(c => 
-      c.id === categoryId ? { ...c, plannedAmount: newAmount } : c
-    );
+    const updatedCategories = event.categories.map(c => {
+      if (c.id !== categoryId) return c;
+      let updatedLineItems = c.lineItems;
+      if (c.lineItems && c.lineItems.length > 0) {
+        const oldSum = c.lineItems.reduce((acc, it) => acc + (it.plannedAmount || 0), 0) || c.plannedAmount || 1;
+        const ratio = newAmount / oldSum;
+        updatedLineItems = c.lineItems.map(item => ({
+          ...item,
+          plannedAmount: Math.round((item.plannedAmount || 0) * ratio)
+        }));
+        // Balance rounding discrepancy so sum strictly matches newAmount
+        const currentSum = updatedLineItems.reduce((acc, it) => acc + it.plannedAmount, 0);
+        const remainder = newAmount - currentSum;
+        if (remainder !== 0 && updatedLineItems.length > 0) {
+          updatedLineItems[0].plannedAmount += remainder;
+        }
+      }
+      return {
+        ...c,
+        plannedAmount: newAmount,
+        lineItems: updatedLineItems
+      };
+    });
     onUpdateEvent({ ...event, categories: updatedCategories, updatedAt: new Date().toISOString() });
     setEditingCategory(null);
   };

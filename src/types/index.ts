@@ -224,8 +224,8 @@ export interface VendorRecommendation {
   name: string;
   category: RecommendationCategory;
   city: string;
-  rating: number;
-  reviewsCount: number;
+  rating?: number;
+  reviewsCount?: number;
   priceRange: string;
   estimatedCost: number;
   unitPricingLabel?: string;
@@ -233,8 +233,11 @@ export interface VendorRecommendation {
   highlights: string[];
   contactName?: string;
   contactNumber?: string;
-  matchScore: number;
+  matchScore?: number;
   isAddedToBudget?: boolean;
+  isIllustrativeDemo?: boolean;
+  verificationStatus?: 'unverified' | 'pending_review' | 'verified';
+  disclaimer?: string;
 }
 
 export interface ChatMessage {

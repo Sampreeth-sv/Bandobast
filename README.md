@@ -1,30 +1,29 @@
 # Bandobast — Intelligent Event Operations Platform
 *One change. A thousand connections. Bandobast keeps it together.*
 
-Built for **PromptWars Challenge 5: Celebration & Event Planner**.
+Built for **Celebration & Event Operations** (Weddings, Milestone Birthdays, Engagements, Family Reunions, Community Galas, and Custom Celebrations).
 
 ---
 
-## 1. Product Overview & Intended Persona
+## 1. Product Overview & Core Philosophy
 
-**Bandobast** is an AI-powered event operations platform that connects budgets, vendor quotations, guest counts, family priorities, and deadlines into one living event twin.
+**Bandobast** is an event operations platform that unifies budgets, vendor proposals, guest counts, family priorities, and milestone deadlines into one living event twin.
 
 ### The Problem
-During Indian weddings and large celebrations, a seemingly innocent change (e.g. inviting 40 additional guests, moving the auspicious wedding date earlier by two weeks, or an unexpected 20% vendor price hike) triggers chaotic, hidden downstream ripple effects across catering plates, venue capacities, gift counts, and milestone deadlines. Most organizers manage this in disjointed spreadsheets and WhatsApp groups.
+During Indian celebrations and multi-function events, an upstream change (inviting 40 additional guests, advancing event dates by two weeks, or an unexpected supplier quote hike) triggers complex downstream ripple effects across catering plates, venue capacities, gift quantities, and compressed task deadlines. Most organizers manage this in chaotic spreadsheets and informal messaging groups.
 
-### The Solution
-Bandobast maintains a unified living event twin. When an upstream parameter changes:
-1. **Deterministic code** calculates exact financial math, per-head catering allocations, and venue capacity limits.
-2. The **Ripple Engine** visually highlights affected nodes, flags capacity overruns, and explains why items changed.
-3. The **Priority Compass** generates 3 genuinely distinct, mathematically balanced trade-off scenarios (*Protect the Feast*, *Protect the Guest List*, *Protect the Memories*) respecting family mandates.
-4. The organizer can inspect and **apply** an approved scenario, instantly synchronizing the entire event plan.
-5. **Quote X-Ray** parses vendor proposals, flags omitted fees ("Not mentioned — ask vendor"), and drafts multilingual inquiries in English, Hindi, and Gujarati.
+### The Bandobast Solution
+1. **Deterministic Event Engine:** Exact mathematical calculations across categories, per-head allocations, and real venue capacities without hardcoded category IDs.
+2. **Causality & Ripple Engine:** Visually graphs interconnected impacts across upstream drivers, intermediate service lines, and bottom-line financials, with an accessible textual summary mode.
+3. **Priority Compass & Trade-off Simulator:** Generates 3 genuinely distinct, mathematically balanced trade-off scenarios (*Protect the Feast*, *Protect the Guest List*, *Protect the Memories*) that never cut protected priorities and never produce negative allocations.
+4. **Vendor Trust & Provenance Tracking:** All AI-extracted quotes and recommendations are explicitly marked as unverified demo estimates until confirmed by the organizer.
+5. **Quote X-Ray:** Ingests vendor proposals via PDF/Image document upload or text paste, normalizes itemized deliverables, flags omitted contract clauses, and drafts multilingual follow-ups in English, Hindi, and Gujarati.
 
 ---
 
 ## 2. Visual Design System
 
-Designed strictly around warm, elegant Indian celebratory aesthetics:
+Designed around an authentic, warm Indian celebratory aesthetic:
 - **Warm Ivory Background:** `#FAF7F0`
 - **White/Cream Card Surfaces:** `#FFFDF9`
 - **Forest Olive (Primary Accent):** `#405B43`
@@ -32,19 +31,20 @@ Designed strictly around warm, elegant Indian celebratory aesthetics:
 - **Marigold (Celebration Highlights):** `#E7A83E`
 - **Terracotta (Secondary Accent):** `#C76F50`
 - **Espresso Body Text:** `#302F28`
-- **Muted Text:** `#77756B`
+- **Muted High-Contrast Labels:** `#5A584F`
 - **Soft Borders:** `#E7E0D3`
-- **Typography:** Playfair Display for editorial display headings + Plus Jakarta Sans / Inter for clean interface readability.
+- **Typography:** Playfair Display for editorial display headings + Plus Jakarta Sans for interface text.
 
 ---
 
-## 3. Architecture & Core Tech Stack
+## 3. Architecture & Tech Stack
 
-- **Frontend:** React 19 SPA, TypeScript, Tailwind CSS v4, Lucide React icons, Recharts for financial analytics, Canvas Confetti.
-- **PWA Capabilities:** Complete Progressive Web App with `manifest.json`, Service Worker offline caching, home screen install prompt banner, and shortcut actions.
-- **Backend Server:** Node.js Express server running on port 3000 with Vite middleware in development mode (`tsx server.ts`).
-- **AI & LLM Integration:** Official Google Gen AI SDK (`@google/genai`) using `gemini-2.5-flash` with structured JSON output schemas and robust deterministic demo fallbacks.
-- **Testing:** Native Node.js test runner (`node:test`, `node:assert`) with automated unit tests for ripple propagation, capacity checks, and budget balance.
+- **Frontend:** React 19 SPA, TypeScript, Tailwind CSS v4, Lucide React, Recharts for financial analytics, Canvas Confetti.
+- **PWA Capabilities:** Progressive Web App with `manifest.json`, Service Worker offline caching, installation prompt banner, and viewport zoom accessibility.
+- **Backend Server:** Node.js Express server running on port 3000 with Vite middleware in development mode (`tsx server.ts`) and static asset serving in production.
+- **API Security & Validation:** Strict runtime request schema validation via **Zod**, in-memory sliding-window IP rate limiting, and request timeouts.
+- **AI & LLM Integration:** Google Gen AI SDK (`@google/genai`) using `gemini-2.0-flash` with structured JSON output schemas and deterministic demo fallbacks.
+- **Testing:** Native Node.js test runner (`node:test`, `node:assert`) with 17 automated tests across 6 test suites.
 
 ---
 
@@ -53,129 +53,84 @@ Designed strictly around warm, elegant Indian celebratory aesthetics:
 ### A. Home Hub & Conversation Launcher
 - Dedicated landing screen welcoming organizers to Bandobast.
 - **Start New Chat & Old Chats History:** Launch new AI consultations or resume previous planning sessions with full message history and budgets.
-- **Interactive Budget Controller:** Real-time slider and numeric input to change the total celebration budget with immediate visual percentage breakdowns across catering, venue, decor, photography, and contingency reserve. Click "Apply to Event" to sync changes directly into the living ledger.
+- **Interactive Budget Controller:** Real-time slider and numeric input to change the total celebration budget with immediate visual breakdowns across catering, venue, decor, photography, and contingency reserve. Click "Apply to Event" to sync changes directly into the living ledger.
 - **Fast Navigation Grid:** Instant access cards to the Ripple Engine, Budget Studio, Quote X-Ray, and Timeline.
 
 ### B. Gen AI Place, Catering & Photography Recommender
-- Powered by `gemini-3.8-flash` with curated fallback data matching the exact budget specified by the user.
-- **Venues & Places:** Heritage Havelis, palace courtyards, luxury resort lawns, and banquet halls with capacity ratings, pricing tiers, and contact numbers.
-- **Food & Catering:** Authentic royal thali caterers, live chaat & dessert station specialists, and Satvik/Jain menus with per-plate pricing calibrated to the headcount.
-- **Photography & Cinematography:** Candid photographers, 4K cinematic drone studios, and heirloom album packages.
-- **Decoration & Florals:** Vedic mandap artists, marigold canopy specialists, and ambient lighting designers.
-- **1-Click "Add to Event Budget":** Injects the recommended vendor or venue directly into the active event's budget ledger with provenance tracking.
+- Powered by `gemini-2.0-flash` with budget-scaled illustrative databases.
+- Clearly flags recommendations with `isIllustrativeDemo` and `verificationStatus: unverified`.
+- **1-Click "Add to Event Budget":** Injects the recommended vendor or venue dynamically into the matching budget category with unverified provenance badges.
 
 ### C. Bandobast AI Advisor Chat
-- Interactive conversation interface with Gemini 3.8 Flash.
-- In-chat budget adjuster pill allowing users to change their budget during the conversation.
-- Structured recommendation widgets embedded within the chat stream with instant "Add to Budget" actions.
-- Pre-built prompt suggestions for venue discovery, catering plate calculations, and budget division strategies.
+- Interactive conversation interface with Gemini 2.0 Flash.
+- In-chat budget adjuster allowing users to adjust their budget dynamically during the consultation.
+- In-memory recommendation caching to eliminate duplicate API requests.
 
 ### D. Overview Dashboard
-- Living readiness indicator computed deterministically from task completion % and confirmed vendor quotes.
+- Living readiness indicator computed deterministically from task completion % and verified vendor quotes.
 - Financial velocity metrics: Total Budget, Planned Allocations, Committed Contracts, Paid Advances, and Cost Per Guest.
 - Multi-function preview cards with date, time, venue, capacity, and attire themes.
-- Active Ripple Simulation impact banner with direct links to rebalance trade-offs.
 
-### B. Living Event Twin & Ripple Engine (Signature Feature)
-- Multi-tier visual dependency network:
+### E. Living Event Twin & Ripple Engine
+- Multi-tier dependency network:
   - *Tier 1: Upstream Drivers* (Guest Headcount, Auspicious Dates).
-  - *Tier 2: Direct Dependents* (Venue Capacity, Royal Rasoi Catering, Return Favors).
+  - *Tier 2: Direct Dependents* (Venue Capacities, Dynamic Service Categories).
   - *Tier 3: Downstream Aggregators* (Total Event Budget, Task Lead-times).
-- **Preset 1 (Guest Increase):** Attendance jumps from 180 to 220. Recalculates catering lines, flags Heritage Lawns capacity alert (max 200 pax; 20 over capacity).
-- **Preset 2 (Date Shift):** Moves wedding dates 2 weeks earlier. Recalculates all dependent task deadlines; flags overdue lead times.
-- **Preset 3 (Vendor Price Spike):** Applies +20% price hike on catering and florals; recalculates budget overrun and prompts Trade-off Simulator.
-- **Node Inspector:** Click any node to inspect causality, trigger source, authoritative data source, and recommended next actions.
+- **Dual View Modes:** Visual Canvas Graph mode and an **Accessible Textual Summary (Table Mode)** for screen readers and keyboard navigation.
+- **Presets & Custom Shifts:** Test headcount changes, date shifts, and vendor rate hikes with live causality inspection.
 
-### C. Priority Compass & Trade-off Simulator
-- Rank and lock core family priorities (Food Quality, Photography, Hospitality, Decor, Guest Count, Convenience).
+### F. Priority Compass & Trade-off Simulator
+- Rank and lock core family priorities.
 - Generates 3 genuinely distinct mathematical scenarios:
-  1. **Protect the Feast:** Preserves live stations & 4-course banquet; trims decor and drone package to save ₹26,000.
-  2. **Protect the Guest List:** Retains full 220 guests; switches to digital cloud photo galleries and mobilizes contingency reserve to save ₹28,500.
-  3. **Protect the Memories:** Preserves 4K cinema teaser and heirloom album; re-purposes morning florals for evening stage and trims dessert courses to save ₹25,000.
-- Click **"Apply to Living Plan"** to update budget allocations, line items, and provenance records across all views.
+  1. **Protect the Feast:** Preserves live stations & banquet catering; balances decor and media.
+  2. **Protect the Guest List:** Retains full guest turnout; switches to digital photo galleries and mobilizes contingency reserve.
+  3. **Protect the Memories:** Preserves complete cinematic filming; repurposes florals and optimizes dessert redundancies.
+- Automatically passes simulated overruns into the trade-off engine and calculates real mathematical savings.
 
-### D. Vendor Quote X-Ray & Clarification Drafter
-- Paste quotation text or upload vendor proposals.
-- Structured line-item breakdown with unit prices, subtotals, GST, and terms.
-- Explicit detection of omissions ("Overtime charges not mentioned — ask vendor", "Staff gratuity not specified").
-- Multilingual clarification inquiry generator (English, Hindi, Gujarati) with one-click copy draft.
+### G. Vendor Quote X-Ray & Clarification Drafter
+- **Document Upload:** Ingests PDF documents and image rate sheets (PNG, JPG, WebP) under 6MB via secure base64 decoding.
+- **Text Paste:** Supports raw WhatsApp quotation text or email breakdowns.
+- **Omission Detection:** Flags unmentioned overtime rates, gratuities, and tasting sessions.
+- **Review & Verification:** Extracted quotes are flagged as *Pending Review* until verified by the organizer.
+- **Multilingual Drafter:** Generates professional clarification letters in English, Hindi, and Gujarati.
 
-### E. Adaptive Timeline & Calendar Export
-- Multi-function filtering (Mehendi, Sangeet, Vedic Wedding, Reception, Combined).
+### H. Adaptive Timeline & Calendar Export
+- Multi-function filtering across scheduled ceremonies and celebrations.
 - Lead-time recomputation when dates shift.
-- Task completion toggles directly feeding into overall Event Readiness.
-- Downloadable standard `.ics` iCalendar file for syncing with Google Calendar or Apple Calendar.
-
-### F. Multi-Event Versatility
-- Supports Weddings, Milestone Birthdays, Engagements, Family Reunions, and Community Galas.
-- Preloaded with two full celebrations:
-  1. *Aarav & Meera's Wedding Celebration* (Multi-function Indian wedding).
-  2. *Arjun's 30th Milestone Rooftop Soiree* (Milestone birthday template).
+- Downloadable standard `.ics` iCalendar file with RFC 5545 text escaping and time span formatting.
 
 ---
 
-## 5. Requirement-to-Feature Mapping (PromptWars Challenge 5)
-
-| Challenge Requirement | Bandobast Implementation | Verification |
-|---|---|---|
-| **Visual Palette** (Ivory, Olive, Sage, Marigold, Terracotta) | Configured in Tailwind v4 theme & applied across all screens | Inspected & styled |
-| **Living Event Twin / Ripple Engine** | Deterministic multi-variable graph engine in `src/services/rippleEngine.ts` | Tested via `tests/rippleEngine.test.ts` |
-| **Scenario 1: Headcount Increase (180 → 220)** | Live per-guest math + venue capacity overrun alert (Heritage Lawns cap: 200) | Test #3 passes |
-| **Scenario 2: Earlier Date (-14 days)** | Dynamic lead-time recomputation flagging overdue milestones | Test #4 passes |
-| **Scenario 3: Vendor Price Hike (+20%)** | Financial ceiling calculation with overrun alerts | Test #5 passes |
-| **Trade-off Simulator (3 Scenarios)** | Mathematically distinct scenarios respecting Priority Compass | Test #6 passes |
-| **Apply Scenario to Event** | State mutation with provenance updating Budget, Timeline & Twin | Test #7 passes |
-| **Quote X-Ray & Omission Detection** | Identifies missing GST, overtime & drafting multilingual inquiries | `/api/quote/extract` & UI |
-| **Data Provenance System** | Badges on line items: `quoted`, `user_entered`, `ai_estimate`, `illustrative` | `ProvenanceBadge.tsx` |
-| **Calendar Sync** | Downloadable `.ics` export with events & milestone deadlines | Test #8 passes |
-| **Multi-Event Support** | Reusable architecture supporting Weddings, Birthdays, Community events | Event Wizard & Switcher |
-| **PWA Compliance** | Web app & installable app at the same time with manifest, SW, & icons | `manifest.json` & `sw.js` |
-
----
-
-## 6. Local Setup & Running Instructions
+## 5. Local Setup & Running Instructions
 
 ### Prerequisites
 - Node.js 18+
 - npm 9+
 
-### Quickstart
+### Commands
 ```bash
 # 1. Install dependencies
 npm install
 
-# 2. Run automated verification tests
+# 2. Run automated test suites (17 tests across 6 suites)
 npm test
 
-# 3. Start development server (Express + Vite on Port 3000)
+# 3. Type check
+npm run lint
+
+# 4. Production build
+npm run build
+
+# 5. Start development server (Express + Vite on Port 3000)
 npm run dev
-
-# 4. Open in browser:
-# http://localhost:3000
 ```
 
-### Environment Variables (`.env.example`)
+Open `http://localhost:3000` in your browser.
+
+### Environment Configuration (`.env`)
 ```env
-# Optional: Gemini API Key for dynamic live AI extractions.
+# Optional: Gemini API Key for live generative AI extractions and chats.
 # If omitted, Bandobast runs in 100% functional demo mode with structured deterministic fallbacks.
-GEMINI_API_KEY="MY_GEMINI_API_KEY"
-APP_URL="http://localhost:3000"
+GEMINI_API_KEY="YOUR_GEMINI_API_KEY"
+PORT=3000
 ```
-
----
-
-## 7. Automated Test Suite
-
-Run tests:
-```bash
-npm test
-```
-Validates:
-1. Deterministic budget math & remaining balance
-2. Event readiness algorithm
-3. Headcount increase & venue capacity overflow checks
-4. Date compression & overdue task detection
-5. Vendor quote spike propagation
-6. Priority Compass: 3 distinct scenarios
-7. Scenario application & provenance tracking
-8. iCalendar `.ics` valid generation
